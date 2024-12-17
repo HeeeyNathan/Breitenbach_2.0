@@ -1,0 +1,76 @@
+---
+title: "Diptera"
+author: "Nathan Jay Baker & Viktor Baranov"
+format: pdf
+editor: visual
+date: 2024/11/13
+format: 
+  html: 
+    code-overflow: wrap
+    fig-height: 12
+    fig-width: 12
+    fig-format: svg
+    eval: TRUE
+    warning: false
+---
+
+# Load necessary packages
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(reshape2)
+library(SpadeR)
+library(vegan)
+library(codyn)
+library(mobr)
+library(iNEXT)
+library(data.table)
+library(readxl)
+```
+
+# Load the data
+
+```{r}
+diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |> # read in excel spreadsheet 
+  as_tibble() |>                                                           # Make tibble table
+  clean_names() |>                                                         # Homogenize column names 
+  rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>         # Change column names
+  filter(order == "Diptera") |>                                            # Keeps only Dipteran taxa
+  select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>                      # Removes empty (0) columns
+  mutate(trap_new = case_when(                                             # Homogenize trap names
+    trap %in% c('A/I') ~ 'A',
+    trap %in% c('Haus I') ~ 'I',
+    trap %in% c('B / II', 'B-II-X', 'B/II', 'Haus B/II') ~ 'B',
+    trap %in% c('C / IV', 'C-IV', 'C/IV', 'Haus C', 'Haus C/IV') ~ 'C',
+    trap %in% c('Haus III') ~ 'III',
+    trap %in% c('E / V', 'E-V', 'E/V', 'Haus E/V') ~ 'E',
+    trap %in% c('F / VI', 'F-VI', 'F-VII', 'F/VI', 'Haus F/VI') ~ 'F',
+    trap %in% c('G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
+    trap %in% c('Quelle') ~ 'Quelle',
+    TRUE ~ trap)) |> 
+  select(-c(taxa_id:trap)) |>                                              # Remove unnecessary columns
+  mutate(sp_name  = validated_name,                                        # Change column names
+         trap     = trap_new,                                              # Change column names
+         trap     = factor(trap)) |>                                       # make trap a factor
+  arrange(trap, family, sp_name) |>                                        # Sort data
+  select(-c(validated_name, trap_new, order)) |>                           # Remove unnecessary columns
+  select(trap, sp_name, family, everything()) |>                           # rearrange columns
+  print()
+
+diptera |> 
+  select(where(is.numeric)) |>  # Select only numeric columns
+  unlist() |>                   # Flatten the data
+  sum(na.rm = TRUE)
+```
+
+```{r}
+diptera_cleaned <- diptera |> 
+  group_by(trap, sp_name, family) |>  # Grouping by trap, sp_name, and family
+  summarise(across(where(is.numeric), ~sum(.x, na.rm = TRUE)), .groups = "drop")
+
+diptera_cleaned |> 
+  select(where(is.numeric)) |>  # Select only numeric columns
+  unlist() |>                   # Flatten the data
+  sum(na.rm = TRUE)
+```
