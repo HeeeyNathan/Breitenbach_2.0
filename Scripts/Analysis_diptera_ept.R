@@ -1,5 +1,5 @@
-# Calculate winners and losers for all groups (families?) with mblm and 
-# then use that metric to compare rates of biodiv accumulation 
+# Calculate winners and losers for all groups (families?) with mblm and
+# then use that metric to compare rates of biodiv accumulation
 
 ##########################################
 # Package  installation
@@ -9,21 +9,21 @@ library(janitor)
 ##########################################
 ## Subsetting and preparing Breitenbach datasets for analysis
 # Load ept
-ept <- as_tibble(read.csv("ept breitenbach_all traps.csv",sep=",")) %>% 
-  clean_names() %>% 
-  rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) %>%  
-  mutate(across(-c(ept, breitenbach, x), ~ as.numeric(.x))) %>% 
+ept <- as_tibble(read.csv("ept breitenbach_all traps.csv",sep=",")) %>%
+  clean_names() %>%
+  rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) %>%
+  mutate(across(-c(ept, breitenbach, x), ~ as.numeric(.x))) %>%
   mutate(across(-c(ept, breitenbach, x), ~ replace_na(.x, 0)))
 
 # Load diptera
-diptera <- as_tibble(read.csv("breit_main_diptera1_updated_names.csv",sep=","))  %>% 
-# Homogenize column names 
-  clean_names() %>% 
+diptera <- as_tibble(read.csv("breit_main_diptera1_updated_names.csv",sep=","))  %>%
+# Homogenize column names
+  clean_names() %>%
 # Change column names
-  rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) %>%  
+  rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) %>%
 # convert NAs to 0
-  mutate(across(-c(diptera, trap, family), ~ as.numeric(.x))) %>% 
-  mutate(across(-c(diptera, trap, family), ~ replace_na(.x, 0))) %>% 
+  mutate(across(-c(diptera, trap, family), ~ as.numeric(.x))) %>%
+  mutate(across(-c(diptera, trap, family), ~ replace_na(.x, 0))) %>%
 # Homogenize trap names
   mutate(trap = case_when(
     trap %in% c('A/I') ~ 'A',
@@ -35,7 +35,7 @@ diptera <- as_tibble(read.csv("breit_main_diptera1_updated_names.csv",sep=",")) 
     trap %in% c('F / VI', 'F-VI', 'F-VII', 'F/VI', 'Haus F/VI') ~ 'F',
     trap %in% c('G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
     trap %in% c('Quelle') ~ 'Quelle', # is this correct?
-    TRUE ~ trap)) %>% 
+    TRUE ~ trap)) %>%
 # Change column name
   mutate(sp_name = diptera) %>%
 # # Create new column with taxa names without sex marker
@@ -43,18 +43,18 @@ diptera <- as_tibble(read.csv("breit_main_diptera1_updated_names.csv",sep=",")) 
 #          sp_name = gsub(' l', '', sp_name),
 #          sp_name = gsub(' m', '', sp_name)) %>%
 # Reorder columns
-  select(diptera, sp_name, family, trap, everything()) %>% 
+  select(diptera, sp_name, family, trap, everything()) %>%
 # Sort data
   arrange(sp_name) %>%
 # Remove diptera column
   select(-diptera)
 
 # Aggregate data according to species names, traps, and families  - THIS NEEDS WORK DUE TO NAMING ERRORS IN ORIGINAL DATA!!!!
-diptera_clean <- aggregate(diptera[, 4:40], 
-                           list(sp_name = diptera$sp_name, 
+diptera_clean <- aggregate(diptera[, 4:40],
+                           list(sp_name = diptera$sp_name,
                                 trap = diptera$trap,
-                                family = diptera$family), 
-                           sum) %>% 
+                                family = diptera$family),
+                           sum) %>%
   # Sort data
   arrange(trap, sp_name)
 
@@ -68,14 +68,14 @@ diptera_long <- diptera_clean %>%
 # create new column with trap_code (trap name + year)
   mutate(trap_code = paste(trap, year, sep = "_")) %>%
 # make year variable numeric
-  mutate(year = as.numeric(year)) %>% 
+  mutate(year = as.numeric(year)) %>%
 # Remove rows where count is 0
   filter(abundance != 0) %>%
 # Sort data
   arrange(sp_name)
 
 # Reaggregate data according to species names and traps
-diptera_agg <- aggregate(diptera_long[, 5], list(sp_name = diptera_long$sp_name, 
+diptera_agg <- aggregate(diptera_long[, 5], list(sp_name = diptera_long$sp_name,
                                                trap = diptera_long$trap), sum)
 
 # Check if the columns of both the initial and aggregated dataset are the same
@@ -115,9 +115,9 @@ diptera_long <- diptera_clean %>%
     values_to = "abundance"   # Name column that will hold the counts
   ) %>%
   # create new column with trap_code (trap name + year)
-  mutate(trap_code = paste(trap, year, sep = "_")) %>% 
+  mutate(trap_code = paste(trap, year, sep = "_")) %>%
   # make year variable numeric
-  mutate(year = as.numeric(year)) %>% 
+  mutate(year = as.numeric(year)) %>%
   # Remove rows where count is 0
   filter(abundance != 0) %>%
   # Sort data
@@ -145,12 +145,12 @@ for(i in unique(diptera_long$trap)){
   DATA1_Turnover_disapp <- turnover(sub, time.var = "year", species.var = "sp_name", abundance.var = "abundance", replicate.var = NA, metric = "disappearance")
   Turnover_disapp <- c("NA", DATA1_Turnover_disapp$disappearance) 					  # Turnover per yr And first yr is "NA"
   sub.m_r <- dcast(sub, trap_code ~ sp_name, sum, value.var = "ro.ab")    # matrix form for rarefaction with rounded richness
-  sub.ta_r <- subset(sub.m_r[,c(2:length(sub.m_r))])                  	# subset matrix to remove row names for rounded sppRich    	
+  sub.ta_r <- subset(sub.m_r[,c(2:length(sub.m_r))])                  	# subset matrix to remove row names for rounded sppRich
   rare.SppRich <- if (min(rowSums(sub.ta_r)) > 10) {
     rarefy(sub.ta_r, sample = min(rowSums(sub.ta_r)))			# rarefy based on min abundance
   } else {rarefy(sub.ta_r, sample = 10)} 					        # rarefy based on abund = 10 if min is less
   TD.i <- data.frame(sub.m$trap_code, SppRich, Simp, Shan, EvenJ, E10, Abund, S_PIE, Turnover, Turnover_app, Turnover_disapp, rare.SppRich)
-  TD <- rbind(TD, TD.i) ; rm(TD.i, sub.m, sub.ta, sub, SppRich, Simp, Shan, 
+  TD <- rbind(TD, TD.i) ; rm(TD.i, sub.m, sub.ta, sub, SppRich, Simp, Shan,
                              EvenJ, E10, Abund, S_PIE, DATA1_Turnover, Turnover, DATA1_Turnover_app, Turnover_app, DATA1_Turnover_disapp, Turnover_disapp, sub.m_r, sub.ta_r, rare.SppRich)
 } ; rm(i)
 
@@ -160,7 +160,7 @@ colnames(TD)[1] <- "trap_code"
 TD <- TD %>%
   mutate(trap = gsub("_.*", "", trap_code),
          year = gsub(".*_", "", trap_code)) %>%
-  # mutate(EvenJ = ifelse(is.nan(EvenJ), 0, EvenJ)) %>% 
+  # mutate(EvenJ = ifelse(is.nan(EvenJ), 0, EvenJ)) %>%
   mutate(across(-c(trap_code, trap), as.numeric)) %>%
   # mutate(across(starts_with("Turnover"), ~ replace_na(., 0))) %>%
   select(trap_code, trap, year, everything())
@@ -169,178 +169,178 @@ TD <- TD %>%
 # Define 'My_theme' for plotting
 My_theme <- theme(panel.background = element_blank(),
                   panel.border = element_rect(fill = NA, linewidth = 1.25),
-                  strip.background = element_rect(fill = "white", 
+                  strip.background = element_rect(fill = "white",
                                                   color = "white", linewidth = 1.25),
                   legend.position = "bottom",
-                  text = element_text(size = 16, 
+                  text = element_text(size = 16,
                                       family = "gillsans"))
 
 # Turnover by year
-ggplot(TD %>% 
-         group_by(trap) %>% 
+ggplot(TD %>%
+         group_by(trap) %>%
          filter(n() > 3),
        aes(x = year, y = Turnover)) +
-  geom_line() +      
-  geom_smooth(method = "lm") +  
-  geom_point(size = 2) +   
-  geom_hline(yintercept = 0.5,            
-             linetype = "dotted",           
-             color = "grey50",               
-             size = 0.5) +    
-  facet_wrap(~trap) +                        
+  geom_line() +
+  geom_smooth(method = "lm") +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0.5,
+             linetype = "dotted",
+             color = "grey50",
+             size = 0.5) +
+  facet_wrap(~trap) +
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
-  scale_y_continuous(limits = c(0.25, max(TD$Turnover, na.rm = TRUE))) +  
-  labs(title = "Turnover",  
-       x = "Year",                            
+  scale_y_continuous(limits = c(0.25, max(TD$Turnover, na.rm = TRUE))) +
+  labs(title = "Turnover",
+       x = "Year",
        y = "Turnover",
-       caption = "Species turnover over time by trap") +                      
-  My_theme +                     
+       caption = "Species turnover over time by trap") +
+  My_theme +
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm"))   
+        axis.ticks.length = unit(0.25, "cm"))
 
 # Turnover appearences by year
-ggplot(TD %>% 
-         group_by(trap) %>% 
+ggplot(TD %>%
+         group_by(trap) %>%
          filter(n() > 3),
        aes(x = year, y = Turnover_app)) +
-  geom_line() +      
-  geom_smooth(method = "lm") +  
-  geom_point(size = 2) +   
-  geom_hline(yintercept = 0.5,            
-             linetype = "dotted",           
-             color = "grey50",               
-             size = 0.5) +    
-  facet_wrap(~trap) +                        
+  geom_line() +
+  geom_smooth(method = "lm") +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0.5,
+             linetype = "dotted",
+             color = "grey50",
+             size = 0.5) +
+  facet_wrap(~trap) +
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
-  scale_y_continuous(limits = c(0, max(TD$Turnover, na.rm = TRUE))) +  
-  labs(title = "Turnover: appearences",  
-       x = "Year",                            
+  scale_y_continuous(limits = c(0, max(TD$Turnover, na.rm = TRUE))) +
+  labs(title = "Turnover: appearences",
+       x = "Year",
        y = "Turnover appearences",
-       caption = "Species appearences over time by trap") +                      
-  My_theme +                     
+       caption = "Species appearences over time by trap") +
+  My_theme +
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm"))   
+        axis.ticks.length = unit(0.25, "cm"))
 
 # Turnover disappearences by year
-ggplot(TD %>% 
-         group_by(trap) %>% 
+ggplot(TD %>%
+         group_by(trap) %>%
          filter(n() > 3),
        aes(x = year, y = Turnover_disapp)) +
-  geom_line() +   
-  geom_smooth(method = "lm") +  
-  geom_point(size = 2) +   
-  geom_hline(yintercept = 0.5,            
-             linetype = "dotted",           
-             color = "grey50",               
-             size = 0.5) +    
-  facet_wrap(~trap) +                        
+  geom_line() +
+  geom_smooth(method = "lm") +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0.5,
+             linetype = "dotted",
+             color = "grey50",
+             size = 0.5) +
+  facet_wrap(~trap) +
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3),
                      minor_breaks = seq(min(TD$year), max(TD$year), by = 1)) +
-  scale_y_continuous(limits = c(0, max(TD$Turnover, na.rm = TRUE))) +  
-  labs(title = "Turnover: disappearences",  
-       x = "Year",                            
+  scale_y_continuous(limits = c(0, max(TD$Turnover, na.rm = TRUE))) +
+  labs(title = "Turnover: disappearences",
+       x = "Year",
        y = "Turnover Disappearences",
-       caption = "Species dissappearences through time by traps") +                      
-  My_theme +                    
+       caption = "Species dissappearences through time by traps") +
+  My_theme +
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm"))   
+        axis.ticks.length = unit(0.25, "cm"))
 
 # Abundance by trap by year
-ggplot(TD %>% 
-         group_by(trap) %>% 
+ggplot(TD %>%
+         group_by(trap) %>%
          filter(n() > 3),
        aes(x = year, y = Abund)) +
-  geom_line() +   
-  geom_smooth(method = "lm") +  
-  geom_point(size = 2) +   
-  geom_hline(yintercept = 0.5,            
-             linetype = "dotted",           
-             color = "grey50",               
-             size = 0.5) +    
-  facet_wrap(~trap, scales = "free_y") +                        
+  geom_line() +
+  geom_smooth(method = "lm") +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0.5,
+             linetype = "dotted",
+             color = "grey50",
+             size = 0.5) +
+  facet_wrap(~trap, scales = "free_y") +
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
-  labs(title = "Abundance",  
-       x = "Year",                            
+  labs(title = "Abundance",
+       x = "Year",
        y = "Abundance",
-       caption = "Abundance through time by trap") +                      
+       caption = "Abundance through time by trap") +
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm")) 
+        axis.ticks.length = unit(0.25, "cm"))
 
 # Log abundance by trap by year
-ggplot(TD %>% 
-         group_by(trap) %>% 
+ggplot(TD %>%
+         group_by(trap) %>%
          filter(n() > 3),
        aes(x = year, y = log(Abund + 1))) +
-  geom_line() +   
-  geom_smooth(method = "lm") +  
-  geom_point(size = 2) +   
+  geom_line() +
+  geom_smooth(method = "lm") +
+  geom_point(size = 2) +
   # geom_hline(yintercept = 0.5,
   #            linetype = "dotted",
   #            color = "grey50",
   #            size = 0.5) +
-  facet_wrap(~trap, scales = "free_y") +      
+  facet_wrap(~trap, scales = "free_y") +
   scale_y_continuous(breaks = seq(min(0), max(10), by = 2)) +
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
-  labs(title = "Log abundance",  
-       x = "Year",                            
+  labs(title = "Log abundance",
+       x = "Year",
        y = "log(abundance + 1)",
-       caption = "Log abundance through time by trap") +                      
+       caption = "Log abundance through time by trap") +
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm")) 
+        axis.ticks.length = unit(0.25, "cm"))
 
 # Species richness by trap by year
-ggplot(TD %>% 
-         group_by(trap) %>% 
+ggplot(TD %>%
+         group_by(trap) %>%
          filter(n() > 3),
        aes(x = year, y = SppRich)) +
-  geom_line() +   
-  geom_smooth(method = "lm") +  
-  geom_point(size = 2) +   
-  # geom_hline(yintercept = 0.5,            
-  #            linetype = "dotted",           
-  #            color = "grey50",               
-  #            size = 0.5) +    
-  facet_wrap(~trap, scales = "free_y") +                        
+  geom_line() +
+  geom_smooth(method = "lm") +
+  geom_point(size = 2) +
+  # geom_hline(yintercept = 0.5,
+  #            linetype = "dotted",
+  #            color = "grey50",
+  #            size = 0.5) +
+  facet_wrap(~trap, scales = "free_y") +
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
-  labs(title = "Species richness",  
-       x = "Year",                            
+  labs(title = "Species richness",
+       x = "Year",
        y = "Species richness",
-       caption = "Species richness through time by trap") +                      
+       caption = "Species richness through time by trap") +
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm")) 
+        axis.ticks.length = unit(0.25, "cm"))
 
 # Rarefied species richness by trap by year
-ggplot(TD %>% 
-         group_by(trap) %>% 
+ggplot(TD %>%
+         group_by(trap) %>%
          filter(n() > 3),
        aes(x = year, y = rare.SppRich)) +
-  geom_line() +   
-  geom_smooth(method = "lm") +  
-  geom_point(size = 2) +   
-  # geom_hline(yintercept = 0.5,            
-  #            linetype = "dotted",           
-  #            color = "grey50",               
-  #            size = 0.5) +    
-  facet_wrap(~trap, scales = "free_y") +                        
+  geom_line() +
+  geom_smooth(method = "lm") +
+  geom_point(size = 2) +
+  # geom_hline(yintercept = 0.5,
+  #            linetype = "dotted",
+  #            color = "grey50",
+  #            size = 0.5) +
+  facet_wrap(~trap, scales = "free_y") +
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
-  labs(title = "Rarefied species richness",  
-       x = "Year",                            
+  labs(title = "Rarefied species richness",
+       x = "Year",
        y = "Rarefied species richness",
-       caption = "Rarefied species richness through time by trap") +                      
+       caption = "Rarefied species richness through time by trap") +
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm")) 
+        axis.ticks.length = unit(0.25, "cm"))
 
 # Calculate rarefaction as cumulative curve (i.e. Cumulative rarefaction)
 library(iNEXT)
 # remove traps with lower quality data: Trap D, F, & Quelle
-diptera_wide_red <- diptera_wide %>% 
+diptera_wide_red <- diptera_wide %>%
   select(-D, -F, -Quelle)
 # calculate curves
 diptera_cum.rare = iNEXT(diptera_wide_red, q = 0, datatype = "abundance")
@@ -351,10 +351,10 @@ diptera_cum.rare$AsyEst    # show asymptotic diversity estimates.
 # set plotting theme
 My_theme <- theme(panel.background = element_blank(),
                   panel.border = element_rect(fill = NA, linewidth = 1.25),
-                  strip.background = element_rect(fill = "white", 
+                  strip.background = element_rect(fill = "white",
                                                   color = "white", linewidth = 1.25),
                   legend.position = "bottom",
-                  text = element_text(size = 16, 
+                  text = element_text(size = 16,
                                       family = "gillsans"),
                   axis.text.x = element_text(angle = 45, hjust = 1))
 # plot all accumulation curves in the same graph coloured by assemblages
@@ -368,7 +368,7 @@ p1
 
 
 ###############################################################
-# CLEAN UP 
+# CLEAN UP
 library(pacman)
 # Clear data
 rm(list = ls())  # Removes all objects from environment

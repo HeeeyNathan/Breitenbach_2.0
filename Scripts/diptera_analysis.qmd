@@ -12,6 +12,8 @@ format:
     fig-format: svg
     eval: TRUE
     warning: false
+execute:
+  working-directory: "C:/Users/natha/OneDrive - Gamtos Tyrimu Centras/Breitenbach/Breitenbach_2.0"
 ---
 
 # Load necessary packages
@@ -32,7 +34,8 @@ library(readxl)
 # Load the data
 
 ```{r}
-diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |> # read in excel spreadsheet 
+#| warning: FALSE
+diptera <- read_xlsx("/Data/Breitenbach_community_data_17.12.2024.xlsx") |> # read in excel spreadsheet 
   as_tibble() |>                                                           # Make tibble table
   clean_names() |>                                                         # Homogenize column names 
   rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>         # Change column names
@@ -57,20 +60,44 @@ diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |> # rea
   select(-c(validated_name, trap_new, order)) |>                           # Remove unnecessary columns
   select(trap, sp_name, family, everything()) |>                           # rearrange columns
   print()
+```
 
+### Calculate sum of diptera
+
+```{r}
+#| warning: FALSE
 diptera |> 
   select(where(is.numeric)) |>  # Select only numeric columns
   unlist() |>                   # Flatten the data
   sum(na.rm = TRUE)
 ```
 
+## Remove duplicates in database
+
 ```{r}
+#| warning: FALSE
 diptera_cleaned <- diptera |> 
   group_by(trap, sp_name, family) |>  # Grouping by trap, sp_name, and family
-  summarise(across(where(is.numeric), ~sum(.x, na.rm = TRUE)), .groups = "drop")
+  summarise(across(where(is.numeric), ~sum(.x, na.rm = TRUE)), .groups = "drop") |> 
+  print()
+```
 
+### Calculate new sum of Diptera (should be same as before)
+
+```{r}
+#| warning: FALSE
 diptera_cleaned |> 
   select(where(is.numeric)) |>  # Select only numeric columns
   unlist() |>                   # Flatten the data
   sum(na.rm = TRUE)
+```
+
+### Check for duplicated rows in trap + sp_name combinations
+
+```{r}
+#| warning: FALSE
+diptera_cleaned |> 
+  group_by(trap, sp_name) |> 
+  filter(n() > 1) |> 
+  ungroup()
 ```
