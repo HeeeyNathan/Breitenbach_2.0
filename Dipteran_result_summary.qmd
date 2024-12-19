@@ -5,9 +5,11 @@ editor: visual
 date: 2024/12/18
 format:
   html: 
+    code-overflow: scroll
     fig-height: 12
     fig-width: 12
     fig-format: svg
+    # pdf-engine: lualatex
     eval: TRUE
     warning: false
 ---

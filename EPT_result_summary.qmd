@@ -4,11 +4,12 @@ author: "Viktor Baranov & Nathan Jay Baker"
 editor: visual
 date: 2024/12/18
 format:
-  pdf: 
+  html: 
+    code-overflow: scroll
     fig-height: 12
     fig-width: 12
-    fig-format: png
-    pdf-engine: lualatex
+    fig-format: svg
+    # pdf-engine: lualatex
     eval: TRUE
     warning: false
 ---
@@ -103,38 +104,38 @@ ept_wide <- ept_agg |>
 ## Chao's indices: species estimation in a single community
 
 ```{r}
-chaoA_ept      <- ChaoSpecies(ept_wide$A ,"abundance", k = 2, conf = 0.95)           # ept trap A
-chaoB_ept      <- ChaoSpecies(ept_wide$B ,"abundance", k = 2, conf = 0.95)           # ept trap B
-chaoC_ept      <- ChaoSpecies(ept_wide$C ,"abundance", k = 2, conf = 0.95)           # ept trap C
-chaoE_ept      <- ChaoSpecies(ept_wide$E ,"abundance", k = 2, conf = 0.95)           # ept trap E
-chaoF_ept      <- ChaoSpecies(ept_wide$F ,"abundance", k = 2, conf = 0.95)           # ept trap F
-chaoG_ept      <- ChaoSpecies(ept_wide$G ,"abundance", k = 2, conf = 0.95)           # ept trap G
-chaoI_ept      <- ChaoSpecies(ept_wide$I ,"abundance", k = 2, conf = 0.95)           # ept trap I
-chaoIII_ept    <- ChaoSpecies(ept_wide$III ,"abundance", k = 2, conf = 0.95)         # ept trap III
-chaoO_ept      <- ChaoSpecies(ept_wide$O ,"abundance", k = 2, conf = 0.95)           # ept trap O
+chaoA_ept      <- ChaoSpecies(ept_wide$A ,"abundance", k = 2, conf = 0.95)   # ept trap A
+chaoB_ept      <- ChaoSpecies(ept_wide$B ,"abundance", k = 2, conf = 0.95)   # ept trap B
+chaoC_ept      <- ChaoSpecies(ept_wide$C ,"abundance", k = 2, conf = 0.95)   # ept trap C
+chaoE_ept      <- ChaoSpecies(ept_wide$E ,"abundance", k = 2, conf = 0.95)   # ept trap E
+chaoF_ept      <- ChaoSpecies(ept_wide$F ,"abundance", k = 2, conf = 0.95)   # ept trap F
+chaoG_ept      <- ChaoSpecies(ept_wide$G ,"abundance", k = 2, conf = 0.95)   # ept trap G
+chaoI_ept      <- ChaoSpecies(ept_wide$I ,"abundance", k = 2, conf = 0.95)   # ept trap I
+chaoIII_ept    <- ChaoSpecies(ept_wide$III ,"abundance", k = 2, conf = 0.95) # ept trap III
+chaoO_ept      <- ChaoSpecies(ept_wide$O ,"abundance", k = 2, conf = 0.95)   # ept trap O
 ```
 
 ## Standard community indices + turnover
 
 ```{r}
-ept_long$ro.ab <- round(ept_long$abundance, digits = 0)                              # Round abundance values to whole numbers for rarefaction analysis
-TD <- NULL                                                                           # Initialize empty data frame to store results
+ept_long$ro.ab <- round(ept_long$abundance, digits = 0)                         # Round abundance values to whole numbers for rarefaction analysis
+TD <- NULL                                                                      # Initialize empty data frame to store results
 
-for (i in unique(ept_long$trap)) {                                                   # Loop through each unique trap in the dataset
-  sub <- ept_long[ept_long$trap == i, ]                                              # Create subset for current trap and reshape data from long to wide format
+for (i in unique(ept_long$trap)) {                                              # Loop through each unique trap in the dataset
+  sub <- ept_long[ept_long$trap == i, ]                                         # Create subset for current trap and reshape data from long to wide format
   sub_m <- sub |>
     select(trap_code, sp_name, abundance) |>
     pivot_wider(names_from = sp_name, values_from = abundance, values_fill = 0)
-  sub_ta <- sub_m[, -1]                                                              # Remove trap_code column for calculations
+  sub_ta <- sub_m[, -1]                                                         # Remove trap_code column for calculations
 
   # Calculate diversity indices
-  SppRich <- specnumber(sub_ta)                                                      # Species richness (total number of species)
-  Simp <- diversity(sub_ta, index = "simpson")                                       # Simpson's diversity (probability two random individuals are different species)
-  Shan <- diversity(sub_ta, index = "shannon")                                       # Shannon's diversity (accounts for both abundance and evenness)
-  EvenJ <- Shan / log(SppRich)                                                       # Pielou's evenness (how close in numbers each species is)
-  E10 <- Shan / SppRich                                                              # Shannon's evenness (alternative evenness measure)
-  Abund <- rowSums(sub_ta)                                                           # Total abundance (sum of all individuals)
-  S_PIE <- calc_PIE(sub_ta, ENS = TRUE)                                              # Effective number of common species
+  SppRich <- specnumber(sub_ta)                                                 # Species richness (total number of species)
+  Simp <- diversity(sub_ta, index = "simpson")                                  # Simpson's diversity (probability two random individuals are different species)
+  Shan <- diversity(sub_ta, index = "shannon")                                  # Shannon's diversity (accounts for both abundance and evenness)
+  EvenJ <- Shan / log(SppRich)                                                  # Pielou's evenness (how close in numbers each species is)
+  E10 <- Shan / SppRich                                                         # Shannon's evenness (alternative evenness measure)
+  Abund <- rowSums(sub_ta)                                                      # Total abundance (sum of all individuals)
+  S_PIE <- calc_PIE(sub_ta, ENS = TRUE)                                         # Effective number of common species
 
   # Calculate species turnover metrics between years
   DATA1_Turnover <- codyn::turnover(sub,
@@ -142,10 +143,10 @@ for (i in unique(ept_long$trap)) {                                              
     species.var = "sp_name",
     abundance.var = "abundance",
     replicate.var = NA,
-    metric = "total")                                                                # Total turnover (appearances + disappearances)
-  Turnover <- c("NA", DATA1_Turnover$total)                                          # Add NA for first year
+    metric = "total")                                                           # Total turnover (appearances + disappearances)
+  Turnover <- c("NA", DATA1_Turnover$total)                                     # Add NA for first year
 
-  DATA1_Turnover_app <- codyn::turnover(sub,                                         # Species appearances only
+  DATA1_Turnover_app <- codyn::turnover(sub,                                    # Species appearances only
     time.var = "year",
     species.var = "sp_name",
     abundance.var = "abundance",
@@ -153,7 +154,7 @@ for (i in unique(ept_long$trap)) {                                              
     metric = "appearance")
   Turnover_app <- c("NA", DATA1_Turnover_app$appearance)
 
-  DATA1_Turnover_disapp <- codyn::turnover(sub,                                      # Species disappearances only
+  DATA1_Turnover_disapp <- codyn::turnover(sub,                                 # Species disappearances only
     time.var = "year",
     species.var = "sp_name",
     abundance.var = "abundance",
@@ -166,15 +167,15 @@ for (i in unique(ept_long$trap)) {                                              
     select(trap_code, sp_name, ro.ab) |>
     pivot_wider(names_from = sp_name,
       values_from = ro.ab,
-      values_fill = 0)                                                               # Create matrix with rounded abundances
-  sub_ta_r <- sub_m_r[, -1]                                                          # Remove trap_code column
+      values_fill = 0)                                                          # Create matrix with rounded abundances
+  sub_ta_r <- sub_m_r[, -1]                                                     # Remove trap_code column
 
   # Calculate rarefied species richness
   rare.SppRich <- if (min(rowSums(sub_ta_r)) > 10) {
     rarefy(sub_ta_r, sample = min(rowSums(sub_ta_r)))
   } else {
     rarefy(sub_ta_r, sample = 10)
-  }                                                                                  # If minimum sample size > 10, use that; otherwise use 10 as minimum
+  }                                                                             # If minimum sample size > 10, use that; otherwise use 10 as minimum
 
   # Combine all calculated metrics into a data frame
   TD.i <- data.frame(sub_m$trap_code,
@@ -201,12 +202,12 @@ for (i in unique(ept_long$trap)) {                                              
 
 # Clean up dataframe
 TD <- TD |>
-  as_tibble() |>                                                                     # Convert to tibble format for better handling
-  rename(trap_code = sub_m.trap_code) |>                                             # Fix column name from earlier processing
-  mutate(trap = gsub("_.*", "", trap_code),                                          # Remove everything after _ to get trap ID
-         year = gsub(".*_", "", trap_code)) |>                                       # Remove everything before _ to get year
-  mutate(across(-c(trap_code, trap), as.numeric)) |>                                 # Convert columns to numeric format
-  select(trap_code, trap, year, everything()) |>                                     # Reorder columns: trap_code, trap, year first, then rest
+  as_tibble() |>                                                                # Convert to tibble format for better handling
+  rename(trap_code = sub_m.trap_code) |>                                        # Fix column name from earlier processing
+  mutate(trap = gsub("_.*", "", trap_code),                                     # Remove everything after _ to get trap ID
+         year = gsub(".*_", "", trap_code)) |>                                  # Remove everything before _ to get year
+  mutate(across(-c(trap_code, trap), as.numeric)) |>                            # Convert columns to numeric format
+  select(trap_code, trap, year, everything()) |>                                # Reorder columns: trap_code, trap, year first, then rest
   print()
 ```
 
@@ -262,18 +263,18 @@ ggplot(TD |>
   geom_smooth(method = "lm") +  
   geom_smooth(method = "gam", col = "red") +
   geom_point(size = 2) +   
-  geom_hline(yintercept = 0.5,            
-             linetype = "dotted",           
-             color = "grey50",               
-             size = 0.5) +    
-  facet_wrap(~trap) +                        
+  geom_hline(yintercept = 0.5, 
+             linetype = "dotted", 
+             color = "grey50", 
+             size = 0.5) + 
+  facet_wrap(~trap) +
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
   scale_y_continuous(limits = c(0, max(TD$Turnover, na.rm = TRUE))) +  
   labs(title = "Turnover: appearences",  
-       x = "Year",                            
+       x = "Year", 
        y = "Turnover appearences",
-       caption = "Species appearences over time by trap") +                      
-  My_theme +                     
+       caption = "Species appearences over time by trap") + 
+  My_theme +
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.ticks.length = unit(0.25, "cm"))
@@ -289,20 +290,20 @@ ggplot(TD |>
   geom_line() +   
   geom_smooth(method = "lm") +  
   geom_smooth(method = "gam", col = "red") +
-  geom_point(size = 2) +   
-  geom_hline(yintercept = 0.5,            
-             linetype = "dotted",           
-             color = "grey50",               
-             size = 0.5) +    
-  facet_wrap(~trap) +                        
+  geom_point(size = 2) + 
+  geom_hline(yintercept = 0.5,
+             linetype = "dotted",
+             color = "grey50",
+             size = 0.5) + 
+  facet_wrap(~trap) + 
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3),
                      minor_breaks = seq(min(TD$year), max(TD$year), by = 1)) +
   scale_y_continuous(limits = c(0, max(TD$Turnover, na.rm = TRUE))) +  
   labs(title = "Turnover: disappearences",  
-       x = "Year",                            
+       x = "Year", 
        y = "Turnover Disappearences",
-       caption = "Species dissappearences through time by traps") +                      
-  My_theme +                    
+       caption = "Species dissappearences through time by traps") + 
+  My_theme + 
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.ticks.length = unit(0.25, "cm"))
@@ -318,17 +319,17 @@ ggplot(TD |>
   geom_line() +   
   geom_smooth(method = "lm") +  
   geom_smooth(method = "gam", col = "red") +
-  geom_point(size = 2) +   
-  geom_hline(yintercept = 0.5,            
-             linetype = "dotted",           
-             color = "grey50",               
-             size = 0.5) +    
-  facet_wrap(~trap, scales = "free_y") +                        
+  geom_point(size = 2) + 
+  geom_hline(yintercept = 0.5,
+             linetype = "dotted", 
+             color = "grey50", 
+             size = 0.5) + 
+  facet_wrap(~trap, scales = "free_y") + 
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
   labs(title = "Abundance",  
-       x = "Year",                            
+       x = "Year", 
        y = "Abundance",
-       caption = "Abundance through time by trap") +                      
+       caption = "Abundance through time by trap") + 
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.ticks.length = unit(0.25, "cm")) 
@@ -341,7 +342,7 @@ ggplot(TD |>
          group_by(trap) |> 
          filter(n() > 3),
        aes(x = year, y = log(Abund + 1))) +
-  geom_line() +   
+  geom_line() +
   geom_smooth(method = "lm") +  
   geom_smooth(method = "gam", col = "red") +
   geom_point(size = 2) +   
@@ -349,13 +350,13 @@ ggplot(TD |>
   #            linetype = "dotted",
   #            color = "grey50",
   #            size = 0.5) +
-  facet_wrap(~trap, scales = "free_y") +      
+  facet_wrap(~trap, scales = "free_y") + 
   scale_y_continuous(breaks = seq(min(0), max(10), by = 2)) +
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
   labs(title = "Log abundance",  
-       x = "Year",                            
+       x = "Year",
        y = "log(abundance + 1)",
-       caption = "Log abundance through time by trap") +                      
+       caption = "Log abundance through time by trap") + 
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.ticks.length = unit(0.25, "cm")) 
@@ -373,16 +374,16 @@ ggplot(TD |>
   geom_smooth(method = "lm") +  
   geom_smooth(method = "gam", col = "red") +
   geom_point(size = 2) +   
-  # geom_hline(yintercept = 0.5,            
-  #            linetype = "dotted",           
-  #            color = "grey50",               
-  #            size = 0.5) +    
-  facet_wrap(~trap, scales = "free_y") +                        
+  # geom_hline(yintercept = 0.5,
+  #            linetype = "dotted", 
+  #            color = "grey50",
+  #            size = 0.5) + 
+  facet_wrap(~trap, scales = "free_y") + 
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
   labs(title = "Species richness",  
-       x = "Year",                            
+       x = "Year",
        y = "Species richness",
-       caption = "Species richness through time by trap") +                      
+       caption = "Species richness through time by trap") + 
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.ticks.length = unit(0.25, "cm")) 
@@ -399,16 +400,16 @@ ggplot(TD |>
   geom_smooth(method = "lm") +  
   geom_smooth(method = "gam", col = "red") +
   geom_point(size = 2) +   
-  # geom_hline(yintercept = 0.5,            
-  #            linetype = "dotted",           
-  #            color = "grey50",               
-  #            size = 0.5) +    
-  facet_wrap(~trap, scales = "free_y") +                        
+  # geom_hline(yintercept = 0.5, 
+  #            linetype = "dotted", 
+  #            color = "grey50", 
+  #            size = 0.5) + 
+  facet_wrap(~trap, scales = "free_y") + 
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
   labs(title = "Rarefied species richness",  
        x = "Year",                            
        y = "Rarefied species richness",
-       caption = "Rarefied species richness through time by trap") +                      
+       caption = "Rarefied species richness through time by trap") + 
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.ticks.length = unit(0.25, "cm")) 
@@ -423,10 +424,10 @@ ggplot(TD |>
 #   select(-O, -F) |>
 #   column_to_rownames(var = "sp_name") |>
 #   data.frame() |>
-#   print()                                                                              # remove traps with lower quality data: Trap D, F, & Quelle
-# ept_cum.rare = iNEXT(ept_wide_red, q = 0, datatype = "abundance")                      # calculate accumulation curves
-# write_rds(ept_cum.rare, "Outputs/rarefaction_ept.rds")                                 # save output for quicker loading next time
-ept_cum.rare <- readRDS("Outputs/rarefaction_ept.rds")                                    # load saved output
+#   print()                                                          # remove traps with lower quality data: Trap D, F, & Quelle
+# ept_cum.rare = iNEXT(ept_wide_red, q = 0, datatype = "abundance")  # calculate accumulation curves
+# write_rds(ept_cum.rare, "Outputs/rarefaction_ept.rds")             # save output for quicker loading next time
+ept_cum.rare <- readRDS("Outputs/rarefaction_ept.rds")               # load saved output
 ```
 
 ### Check outputs
@@ -460,7 +461,7 @@ My_theme <- theme(panel.background = element_blank(),
 ### All accumulation curves in one plot
 
 ```{r}
-options(scipen = 999) # Increase penalty to avoid scientific notation
+options(scipen = 999)                                               # Increase penalty to avoid scientific notation
 ept_p <- ggiNEXT(ept_cum.rare, type = 1, color.var = "Assemblage")
 ept_p <- ept_p + ggtitle("EPT")
 ept_p <- ept_p + theme(legend.position = "bottom")
@@ -470,7 +471,7 @@ ept_p
 ### Accumulation curves in separate plots
 
 ```{r}
-options(scipen = 999) # Increase penalty to avoid scientific notation
+options(scipen = 999)                                               # Increase penalty to avoid scientific notation
 ept_p1 <- ggiNEXT(ept_cum.rare, facet.var = "Assemblage", grey = T)
 ept_p1 <- ept_p1 + ggtitle("EPT")
 ept_p1 <- ept_p1 + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
