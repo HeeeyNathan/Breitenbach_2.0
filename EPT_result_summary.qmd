@@ -1,13 +1,14 @@
 ---
-title: "Breitenbach 2.0 - DIPTERA"
+title: "Breitenbach 2.0 - EPT"
 author: "Viktor Baranov & Nathan Jay Baker"
 editor: visual
 date: 2024/12/18
 format:
-  html: 
+  pdf: 
     fig-height: 12
     fig-width: 12
-    fig-format: svg
+    fig-format: png
+    pdf-engine: lualatex
     eval: TRUE
     warning: false
 ---
@@ -27,15 +28,15 @@ library(readxl)
 library(writexl)
 ```
 
-# Load the Dipteran data
+# Load the EPT data
 
 ```{r}
-diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |> # read in excel spreadsheet
+ept <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>     # read in excel spreadsheet
   as_tibble() |>                                                           # Make tibble table
   clean_names() |>                                                         # Homogenize column names
   rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>         # Change column names
   filter(!str_detect(original_name, "Summe")) |>                           # delete rows containing "summe"
-  filter(order == "Diptera") |>                                            # Keeps only Dipteran taxa
+  filter(order %in% c("Ephemeroptera", "Plecoptera", "Trichoptera")) |>    # Keeps only EPT taxa
   select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>                      # Removes empty (0) columns
   mutate(trap_new = case_when(                                             # Homogenize trap names
     trap %in% c('Haus 0') ~ 'O',
@@ -50,6 +51,7 @@ diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |> # rea
     trap %in% c('Haus G', 'G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
     trap %in% c('Quelle') ~ 'Source',
     TRUE ~ trap)) |>
+  filter(!str_detect(trap_new, "D")) |>                                    # delete rows for trap D (only sampled 1983)
   select(-c(taxa_id:trap)) |>                                              # Remove unnecessary columns
   mutate(sp_name  = validated_name,                                        # Change column names
          trap     = trap_new,                                              # Change column names
@@ -63,7 +65,7 @@ diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |> # rea
 # Initial data wrangling
 
 ```{r}
-diptera_clean <- diptera |>
+ept_clean <- ept |>
   group_by(trap,
            sp_name,
            family) |>                                                      # Grouping by trap, sp_name, and family
@@ -71,7 +73,7 @@ diptera_clean <- diptera |>
                    ~sum(.x, na.rm = TRUE)),
                    .groups = "drop")
 
-diptera_long <- diptera_clean |>
+ept_long <- ept_clean |>
   pivot_longer(
     cols = starts_with("19") | starts_with("20"),                          # Specify the year column to pivot
     names_to = "year",                                                     # Name column that will hold year values
@@ -81,14 +83,14 @@ diptera_long <- diptera_clean |>
   filter(abundance != 0) |>                                                # Remove rows where count is 0
   arrange(trap, year)                                                      # Sort data
 
-diptera_agg <- diptera_long |>
+ept_agg <- ept_long |>
   group_by(sp_name,
            trap) |>                                                        # Group by sp_name and trap
   summarise(abundance = sum(abundance),
             .groups = "drop") |>                                           # Summarise with the sum of "abundance"
   arrange(trap)                                                            # Sort data
 
-diptera_wide <- diptera_agg |>
+ept_wide <- ept_agg |>
   pivot_wider(names_from  = trap,
               values_from = abundance,
               values_fill = 0,
@@ -101,25 +103,25 @@ diptera_wide <- diptera_agg |>
 ## Chao's indices: species estimation in a single community
 
 ```{r}
-chaoA_dipt      <- ChaoSpecies(diptera_wide$A ,"abundance", k = 2, conf = 0.95)      # Diptera trap A
-chaoB_dipt      <- ChaoSpecies(diptera_wide$B ,"abundance", k = 2, conf = 0.95)      # Diptera trap B
-chaoC_dipt      <- ChaoSpecies(diptera_wide$C ,"abundance", k = 2, conf = 0.95)      # Diptera trap C
-chaoD_dipt      <- ChaoSpecies(diptera_wide$D ,"abundance", k = 2, conf = 0.95)      # Diptera trap D
-chaoE_dipt      <- ChaoSpecies(diptera_wide$E ,"abundance", k = 2, conf = 0.95)      # Diptera trap E
-chaoF_dipt      <- ChaoSpecies(diptera_wide$F ,"abundance", k = 2, conf = 0.95)      # Diptera trap F
-chaoG_dipt      <- ChaoSpecies(diptera_wide$G ,"abundance", k = 2, conf = 0.95)      # Diptera trap G
-chaoI_dipt      <- ChaoSpecies(diptera_wide$I ,"abundance", k = 2, conf = 0.95)      # Diptera trap I
-chaoIII_dipt    <- ChaoSpecies(diptera_wide$III ,"abundance", k = 2, conf = 0.95)    # Diptera trap III
+chaoA_ept      <- ChaoSpecies(ept_wide$A ,"abundance", k = 2, conf = 0.95)           # ept trap A
+chaoB_ept      <- ChaoSpecies(ept_wide$B ,"abundance", k = 2, conf = 0.95)           # ept trap B
+chaoC_ept      <- ChaoSpecies(ept_wide$C ,"abundance", k = 2, conf = 0.95)           # ept trap C
+chaoE_ept      <- ChaoSpecies(ept_wide$E ,"abundance", k = 2, conf = 0.95)           # ept trap E
+chaoF_ept      <- ChaoSpecies(ept_wide$F ,"abundance", k = 2, conf = 0.95)           # ept trap F
+chaoG_ept      <- ChaoSpecies(ept_wide$G ,"abundance", k = 2, conf = 0.95)           # ept trap G
+chaoI_ept      <- ChaoSpecies(ept_wide$I ,"abundance", k = 2, conf = 0.95)           # ept trap I
+chaoIII_ept    <- ChaoSpecies(ept_wide$III ,"abundance", k = 2, conf = 0.95)         # ept trap III
+chaoO_ept      <- ChaoSpecies(ept_wide$O ,"abundance", k = 2, conf = 0.95)           # ept trap O
 ```
 
 ## Standard community indices + turnover
 
 ```{r}
-diptera_long$ro.ab <- round(diptera_long$abundance, digits = 0)                      # Round abundance values to whole numbers for rarefaction analysis
+ept_long$ro.ab <- round(ept_long$abundance, digits = 0)                              # Round abundance values to whole numbers for rarefaction analysis
 TD <- NULL                                                                           # Initialize empty data frame to store results
 
-for (i in unique(diptera_long$trap)) {                                               # Loop through each unique trap in the dataset
-  sub <- diptera_long[diptera_long$trap == i, ]                                      # Create subset for current trap and reshape data from long to wide format
+for (i in unique(ept_long$trap)) {                                                   # Loop through each unique trap in the dataset
+  sub <- ept_long[ept_long$trap == i, ]                                              # Create subset for current trap and reshape data from long to wide format
   sub_m <- sub |>
     select(trap_code, sp_name, abundance) |>
     pivot_wider(names_from = sp_name, values_from = abundance, values_fill = 0)
@@ -417,14 +419,14 @@ ggplot(TD |>
 ## Calculation of rarefaction curves
 
 ```{r}
-# diptera_wide_red <- diptera_wide |>
-#   select(-D, -F, -Source) |>
+# ept_wide_red <- ept_wide |>
+#   select(-O, -F) |>
 #   column_to_rownames(var = "sp_name") |>
 #   data.frame() |>
-#   print()                                                                             # remove traps with lower quality data: Trap D, F, & Quelle
-# diptera_cum.rare = iNEXT(diptera_wide_red, q = 0, datatype = "abundance")             # calculate accumulation curves
-# write_rds(diptera_cum.rare, "Outputs/rarefaction_diptera.rds")                        # save output for quicker loading next time
-diptera_cum.rare <- readRDS("Outputs/rarefaction_diptera.rds")                          # load saved output
+#   print()                                                                              # remove traps with lower quality data: Trap D, F, & Quelle
+# ept_cum.rare = iNEXT(ept_wide_red, q = 0, datatype = "abundance")                      # calculate accumulation curves
+# write_rds(ept_cum.rare, "Outputs/rarefaction_ept.rds")                                 # save output for quicker loading next time
+ept_cum.rare <- readRDS("Outputs/rarefaction_ept.rds")                                    # load saved output
 ```
 
 ### Check outputs
@@ -432,13 +434,13 @@ diptera_cum.rare <- readRDS("Outputs/rarefaction_diptera.rds")                  
 #### Basic information
 
 ```{r}
-diptera_cum.rare$DataInfo
+ept_cum.rare$DataInfo
 ```
 
 #### Asymptotic diversity estimates.
 
 ```{r}
-diptera_cum.rare$AsyEst
+ept_cum.rare$AsyEst
 ```
 
 ## Plotting
@@ -459,18 +461,18 @@ My_theme <- theme(panel.background = element_blank(),
 
 ```{r}
 options(scipen = 999) # Increase penalty to avoid scientific notation
-diptera_p <- ggiNEXT(diptera_cum.rare, type = 1, color.var = "Assemblage")
-diptera_p <- diptera_p + ggtitle("Diptera")
-diptera_p <- diptera_p + theme(legend.position = "bottom")
-diptera_p
+ept_p <- ggiNEXT(ept_cum.rare, type = 1, color.var = "Assemblage")
+ept_p <- ept_p + ggtitle("EPT")
+ept_p <- ept_p + theme(legend.position = "bottom")
+ept_p
 ```
 
 ### Accumulation curves in separate plots
 
 ```{r}
 options(scipen = 999) # Increase penalty to avoid scientific notation
-diptera_p1 <- ggiNEXT(diptera_cum.rare, facet.var = "Assemblage", grey = T)
-diptera_p1 <- diptera_p1 + ggtitle("Diptera")
-diptera_p1 <- diptera_p1 + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
-diptera_p1
+ept_p1 <- ggiNEXT(ept_cum.rare, facet.var = "Assemblage", grey = T)
+ept_p1 <- ept_p1 + ggtitle("EPT")
+ept_p1 <- ept_p1 + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
+ept_p1
 ```
