@@ -1,22 +1,29 @@
 ---
-title: "Breitenbach 2.0 - EPT"
-author: "Viktor Baranov & Nathan Jay Baker"
+title: Breitenbach 2.0 - EPT
+author: Nathan Jay Baker & Viktor Baranov
 editor: visual
-date: 2024/12/18
+date: "`r Sys.Date()`"
 format:
-  html: 
+  html:
     code-overflow: scroll
-    fig-height: 12
-    fig-width: 12
-    fig-format: svg
-    # pdf-engine: lualatex
-    eval: TRUE
-    warning: false
+    number-sections: true
+    colorlinks: true
+  # pdf:
+  #   code-overflow: wrap
+  #   pdf-engine: lualatex
+  #   toc: true
+  #   number-sections: true
+  #   colorlinks: true
 ---
 
 # Load necessary packages
 
 ```{r}
+#| label: Load packges
+#| warning: false
+#| message: false
+#| code-fold: true
+
 library(tidyverse)
 library(patchwork)
 library(janitor)
@@ -27,18 +34,49 @@ library(mobr)
 library(iNEXT)
 library(readxl)
 library(writexl)
+library(INLA)
+library(DHARMa)
+library(glmmTMB)
+library(sjPlot)
+library(ggeffects)
+library(scales)
+library(splines)
+source("HighstatLibV15.R")
 ```
 
-# Load the EPT data
+# Set plotting parameters
 
 ```{r}
+#| label: Define plotting parametres
+#| code-fold: true
+#| include: false
+#| output: false
+#| echo: false
+
+My_theme <- theme(panel.background = element_blank(),
+                  panel.border = element_rect(fill = NA, linewidth = 1.25),
+                  strip.background = element_rect(fill = "white", 
+                                                  color = "white", linewidth = 1.25),
+                  legend.position = "right",
+                  text = element_text(size = 16),
+                  axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Load the data
+
+```{r}
+#| label: Load data
+#| warning: false
+#| message: false
+#| code-fold: true
+
 ept <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>     # read in excel spreadsheet
   as_tibble() |>                                                           # Make tibble table
   clean_names() |>                                                         # Homogenize column names
   rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>         # Change column names
   filter(!str_detect(original_name, "Summe")) |>                           # delete rows containing "summe"
   filter(order %in% c("Ephemeroptera", "Plecoptera", "Trichoptera")) |>    # Keeps only EPT taxa
-  select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>                      # Removes empty (0) columns
+  dplyr::select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>               # Removes empty (0) columns
   mutate(trap_new = case_when(                                             # Homogenize trap names
     trap %in% c('Haus 0') ~ 'O',
     trap %in% c('Haus A', 'A/I') ~ 'A',
@@ -52,24 +90,28 @@ ept <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>     # rea
     trap %in% c('Haus G', 'G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
     trap %in% c('Quelle') ~ 'Source',
     TRUE ~ trap)) |>
-  filter(!str_detect(trap_new, "D")) |>                                    # delete rows for trap D (only sampled 1983)
-  select(-c(taxa_id:trap)) |>                                              # Remove unnecessary columns
+  filter(!str_detect(trap_new, "D")) |>                                    # delete trap D (only sampled 1983)
+  dplyr::select(-c(taxa_id:trap)) |>                                       # Remove unnecessary columns
   mutate(sp_name  = validated_name,                                        # Change column names
          trap     = trap_new,                                              # Change column names
          trap     = factor(trap)) |>                                       # make trap a factor
   arrange(trap, family, sp_name) |>                                        # Sort data
-  select(-c(validated_name, trap_new, order)) |>                           # Remove unnecessary columns
-  select(trap, sp_name, family, everything()) |>                           # rearrange columns
-  print()
+  dplyr::select(-c(validated_name, trap_new, order)) |>                    # Remove unnecessary columns
+  dplyr::select(trap, sp_name, family, everything())                       # rearrange columns
 ```
 
 # Initial data wrangling
 
 ```{r}
+#| label: Initial data wrangling
+#| warning: false
+#| message: false
+#| code-fold: true
+
 ept_clean <- ept |>
   group_by(trap,
            sp_name,
-           family) |>                                                      # Grouping by trap, sp_name, and family
+           family) |>                                                      # Group by trap, sp_name, and family
   summarise(across(where(is.numeric),
                    ~sum(.x, na.rm = TRUE)),
                    .groups = "drop")
@@ -79,7 +121,7 @@ ept_long <- ept_clean |>
     cols = starts_with("19") | starts_with("20"),                          # Specify the year column to pivot
     names_to = "year",                                                     # Name column that will hold year values
     values_to = "abundance") |>                                            # Name column that will hold the counts
-  mutate(trap_code = paste(trap, year, sep = "_")) |>                      # create new column with trap_code (trap name + year)
+  mutate(trap_code = paste(trap, year, sep = "_")) |>                      # New column: trap_code (trap + year)
   mutate(year = as.numeric(year)) |>                                       # make year variable numeric
   filter(abundance != 0) |>                                                # Remove rows where count is 0
   arrange(trap, year)                                                      # Sort data
@@ -104,6 +146,12 @@ ept_wide <- ept_agg |>
 ## Chao's indices: species estimation in a single community
 
 ```{r}
+#| label: Calculating Chao's indices
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
+
 chaoA_ept      <- ChaoSpecies(ept_wide$A ,"abundance", k = 2, conf = 0.95)   # ept trap A
 chaoB_ept      <- ChaoSpecies(ept_wide$B ,"abundance", k = 2, conf = 0.95)   # ept trap B
 chaoC_ept      <- ChaoSpecies(ept_wide$C ,"abundance", k = 2, conf = 0.95)   # ept trap C
@@ -115,27 +163,146 @@ chaoIII_ept    <- ChaoSpecies(ept_wide$III ,"abundance", k = 2, conf = 0.95) # e
 chaoO_ept      <- ChaoSpecies(ept_wide$O ,"abundance", k = 2, conf = 0.95)   # ept trap O
 ```
 
+## Extracting diversity profiles
+
+This code chunk takes a long time to run, so I include it here as non-executable code. Below this chunk is an rds file with the outputs.
+
+``` r
+attach(ept_wide) # makes each column a separate, accessible vector
+
+# Claculating diversity profiles
+Trap_A_diversity   <- Diversity(`A`, "abundance", q = c(0, 1, 2))
+Trap_B_diversity   <- Diversity(`B`, "abundance", q = c(0, 1, 2))
+Trap_C_diversity   <- Diversity(`C`, "abundance", q = c(0, 1, 2))
+Trap_E_diversity   <- Diversity(`E`, "abundance", q = c(0, 1, 2))
+Trap_F_diversity   <- Diversity(`F`, "abundance", q = c(0, 1, 2))
+Trap_G_diversity   <- Diversity(`G`, "abundance", q = c(0, 1, 2))
+Trap_I_diversity   <- Diversity(`I`, "abundance", q = c(0, 1, 2))
+Trap_III_diversity <- Diversity(`III`, "abundance", q = c(0, 1, 2))
+Trap_O_diversity   <- Diversity(`O`, "abundance", q = c(0, 1, 2))
+
+# List of trap names
+trap_names <- ept_wide |>
+  select(-sp_name) |>
+  colnames()
+
+# Function to process each trap's diversity data
+process_trap <- function(trap_name) {
+  # Dynamically create the variable name for the trap
+  trap_var <- get(paste0("Trap_", trap_name, "_diversity"))
+
+  # Extract Hill numbers data
+  df <- as.data.frame(trap_var$Hill_numbers)
+
+  # Create data frames for each source using column positions
+  # For ChaoJost: columns 1 (q), 2 (ChaoJost), 3 (95%Lower), 4 (95%Upper)
+  chaojost_df <- data.frame(
+    q = df[,1],
+    Source = "ChaoJost",
+    Value = df[,2],
+    Lower_95 = df[,3],
+    Upper_95 = df[,4],
+    Trap = paste("Trap", trap_name)
+  )
+
+  # For Empirical: columns 1 (q), 5 (Empirical), 6 (95%Lower), 7 (95%Upper)
+  empirical_df <- data.frame(
+    q = df[,1],
+    Source = "Empirical",
+    Value = df[,5],
+    Lower_95 = df[,6],
+    Upper_95 = df[,7],
+    Trap = paste("Trap", trap_name)
+  )
+
+  # Combine and arrange
+  rbind(chaojost_df, empirical_df) %>%
+    arrange(Source)
+}
+
+# Apply the function to all traps and combine results into a single dataframe
+all_traps_data <- bind_rows(lapply(trap_names, process_trap)) |>
+      arrange(Source)
+
+saveRDS(all_traps_data, "Outputs/ChoasDiversityProfilesEPT.rds")
+```
+
+```{r}
+#| label: Load precalculated diversity profiles
+#| warning: false
+#| message: false
+#| code-fold: true
+
+Diversity_profiles <- readRDS("Outputs/ChoasDiversityProfilesEPT.rds")
+```
+
+## Plotting diversity profiles
+
+```{r}
+#| label: Plotting diversity profiles
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
+# Define custom colours
+custom_colours <- c("ChaoJost" = "darkorange", "Empirical" = "darkturquoise")
+
+p1 <- Diversity_profiles |> 
+  filter(!(Trap %in% c("Trap F", "Trap O"))) |> 
+  ggplot(aes(x = q, y = Value, colour = Source, group = interaction(Source, Trap))) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1) +
+  geom_ribbon(data = . %>% filter(Source == "ChaoJost"),
+              aes(ymin = Lower_95, ymax = Upper_95, fill = Source),
+              linetype = 2, alpha = 0.2) +  # Style for ChaoJost
+  geom_ribbon(data = . %>% filter(Source == "Empirical"),
+              aes(ymin = Lower_95, ymax = Upper_95, fill = Source),
+              linetype = 2, alpha = 0.2) +  # Different style for Empirical
+  ylab("Hill numbers") +
+  xlab("Order q") +
+  facet_wrap(vars(Trap)) +
+  theme_bw() +
+  scale_colour_manual(values = custom_colours) +
+  scale_fill_manual(values = custom_colours) +
+  labs(colour = "Diversity measure", fill = "Diversity measure") +
+  scale_x_continuous(breaks = c(0, 1, 2)) +
+  theme(
+    axis.title = element_text(family = "Arial", size = 12),
+    axis.text = element_text(family = "Arial", size = 12),
+    strip.text = element_text(family = "Arial", size = 14, face = "bold")
+  )
+p1
+```
+
 ## Standard community indices + turnover
 
 ```{r}
-ept_long$ro.ab <- round(ept_long$abundance, digits = 0)                         # Round abundance values to whole numbers for rarefaction analysis
-TD <- NULL                                                                      # Initialize empty data frame to store results
+#| label: Calculating community indices
+#| warning: false
+#| message: false
+#| code-fold: true
 
-for (i in unique(ept_long$trap)) {                                              # Loop through each unique trap in the dataset
-  sub <- ept_long[ept_long$trap == i, ]                                         # Create subset for current trap and reshape data from long to wide format
+ept_long$ro.ab <- round(ept_long$abundance, digits = 0) # Round abundance to whole numbers for rarefaction
+TD <- NULL                                              # Initialize empty data frame to store results
+
+for (i in unique(ept_long$trap)) {                      # Loop through each unique trap in the dataset
+  sub <- ept_long[ept_long$trap == i, ]                 # subset for current trap & reshape data
   sub_m <- sub |>
-    select(trap_code, sp_name, abundance) |>
+    dplyr::select(trap_code, sp_name, abundance) |>
     pivot_wider(names_from = sp_name, values_from = abundance, values_fill = 0)
-  sub_ta <- sub_m[, -1]                                                         # Remove trap_code column for calculations
+  sub_ta <- sub_m[, -1]                                 # Remove trap_code column for calculations
 
   # Calculate diversity indices
-  SppRich <- specnumber(sub_ta)                                                 # Species richness (total number of species)
-  Simp <- diversity(sub_ta, index = "simpson")                                  # Simpson's diversity (probability two random individuals are different species)
-  Shan <- diversity(sub_ta, index = "shannon")                                  # Shannon's diversity (accounts for both abundance and evenness)
-  EvenJ <- Shan / log(SppRich)                                                  # Pielou's evenness (how close in numbers each species is)
-  E10 <- Shan / SppRich                                                         # Shannon's evenness (alternative evenness measure)
-  Abund <- rowSums(sub_ta)                                                      # Total abundance (sum of all individuals)
-  S_PIE <- calc_PIE(sub_ta, ENS = TRUE)                                         # Effective number of common species
+  SppRich <- specnumber(sub_ta)                         # Species richness (total number of species)
+  Simp <- diversity(sub_ta, index = "simpson")          # Simpson's diversity
+  Shan <- diversity(sub_ta, index = "shannon")          # Shannon's diversity
+  EvenJ <- Shan / log(SppRich)                          # Pielou's evenness
+  E10 <- Shan / SppRich                                 # Shannon's evenness
+  Abund <- rowSums(sub_ta)                              # Total abundance
+  S_PIE <- calc_PIE(sub_ta, ENS = TRUE)                 # Effective number of common species
 
   # Calculate species turnover metrics between years
   DATA1_Turnover <- codyn::turnover(sub,
@@ -143,10 +310,10 @@ for (i in unique(ept_long$trap)) {                                              
     species.var = "sp_name",
     abundance.var = "abundance",
     replicate.var = NA,
-    metric = "total")                                                           # Total turnover (appearances + disappearances)
-  Turnover <- c("NA", DATA1_Turnover$total)                                     # Add NA for first year
+    metric = "total")                                   # Total turnover (appearances + disappearances)
+  Turnover <- c("NA", DATA1_Turnover$total)             # Add NA for first year
 
-  DATA1_Turnover_app <- codyn::turnover(sub,                                    # Species appearances only
+  DATA1_Turnover_app <- codyn::turnover(sub,            # Species appearances only
     time.var = "year",
     species.var = "sp_name",
     abundance.var = "abundance",
@@ -154,7 +321,7 @@ for (i in unique(ept_long$trap)) {                                              
     metric = "appearance")
   Turnover_app <- c("NA", DATA1_Turnover_app$appearance)
 
-  DATA1_Turnover_disapp <- codyn::turnover(sub,                                 # Species disappearances only
+  DATA1_Turnover_disapp <- codyn::turnover(sub,         # Species disappearances only
     time.var = "year",
     species.var = "sp_name",
     abundance.var = "abundance",
@@ -164,18 +331,18 @@ for (i in unique(ept_long$trap)) {                                              
 
   # Prepare data for rarefaction analysis
   sub_m_r <- sub |>
-    select(trap_code, sp_name, ro.ab) |>
+    dplyr::select(trap_code, sp_name, ro.ab) |>
     pivot_wider(names_from = sp_name,
       values_from = ro.ab,
-      values_fill = 0)                                                          # Create matrix with rounded abundances
-  sub_ta_r <- sub_m_r[, -1]                                                     # Remove trap_code column
+      values_fill = 0)                                  # Create matrix with rounded abundances
+  sub_ta_r <- sub_m_r[, -1]                             # Remove trap_code column
 
   # Calculate rarefied species richness
   rare.SppRich <- if (min(rowSums(sub_ta_r)) > 10) {
     rarefy(sub_ta_r, sample = min(rowSums(sub_ta_r)))
   } else {
     rarefy(sub_ta_r, sample = 10)
-  }                                                                             # If minimum sample size > 10, use that; otherwise use 10 as minimum
+  }                                                     # If min sample size > 10, use that; otherwise use 10
 
   # Combine all calculated metrics into a data frame
   TD.i <- data.frame(sub_m$trap_code,
@@ -202,20 +369,40 @@ for (i in unique(ept_long$trap)) {                                              
 
 # Clean up dataframe
 TD <- TD |>
-  as_tibble() |>                                                                # Convert to tibble format for better handling
-  rename(trap_code = sub_m.trap_code) |>                                        # Fix column name from earlier processing
-  mutate(trap = gsub("_.*", "", trap_code),                                     # Remove everything after _ to get trap ID
-         year = gsub(".*_", "", trap_code)) |>                                  # Remove everything before _ to get year
-  mutate(across(-c(trap_code, trap), as.numeric)) |>                            # Convert columns to numeric format
-  select(trap_code, trap, year, everything()) |>                                # Reorder columns: trap_code, trap, year first, then rest
-  print()
+  as_tibble() |>                                       # Convert to tibble format for better handling
+  rename(trap_code = sub_m.trap_code) |>               # Fix column name from earlier processing
+  mutate(trap = gsub("_.*", "", trap_code),            # Remove everything after _ to get trap ID
+         year = as.numeric(gsub(".*_", "", trap_code))) |> # Remove everything before _ to get year and convert to numeric
+  filter(!(trap %in% c("F", "O"))) |> 
+  mutate(
+    trap_code = factor(trap_code),
+    trap      = factor(trap),
+    across(-c(trap_code, trap), as.numeric)) |>   # Convert other columns to numeric format
+  dplyr::select(trap_code, trap, year, everything()) |> # Reorder columns: trap_code, trap, year first, then rest
+  ungroup()                                            # Ungroup the data before further operations
+```
+
+```{r}
+#| label: Check if data standardization worked
+#| include: false
+
+TD <- TD |> 
+  mutate(
+    year.std = MyStd(year))
+
+TD$year.std2 <- (TD$year - mean(TD$year)) / sd(TD$year)
+
+plot(TD$year, TD$year.std)
+
+TD <- TD |> 
+    dplyr::select(-year.std, -year.std2)
 ```
 
 ## Plotting
 
-### Define plotting parameters
-
 ```{r}
+#| label: Define plotting parameters
+#| include: false
 My_theme <- theme(panel.background = element_blank(),
                   panel.border = element_rect(fill = NA, linewidth = 1.25),
                   strip.background = element_rect(fill = "white", 
@@ -227,18 +414,26 @@ My_theme <- theme(panel.background = element_blank(),
 ### Turnover (total) by trap by year
 
 ```{r}
+#| label: Plotting turnover by year
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
 ggplot(TD |> 
          group_by(trap) |> 
          filter(n() > 3),
        aes(x = year, y = Turnover)) +
   geom_line() +      
   geom_smooth(method = "lm") +  
-  geom_smooth(method = "gam", col = "red") +
+  # geom_smooth(method = "gam", col = "red") +
   geom_point(size = 2) +   
   geom_hline(yintercept = 0.5,            
              linetype = "dotted",           
              color = "grey50",               
-             size = 0.5) +    
+             linewidth = 0.5) +    
   facet_wrap(~trap) +                        
   scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
   scale_y_continuous(limits = c(0, max(TD$Turnover, na.rm = TRUE))) +  
@@ -252,73 +447,87 @@ ggplot(TD |>
         axis.ticks.length = unit(0.25, "cm"))
 ```
 
-### Turnover (appearances) by trap by year
+### Turnover density
 
 ```{r}
-ggplot(TD |> 
-         group_by(trap) |> 
-         filter(n() > 3),
-       aes(x = year, y = Turnover_app)) +
-  geom_line() +      
-  geom_smooth(method = "lm") +  
-  geom_smooth(method = "gam", col = "red") +
-  geom_point(size = 2) +   
-  geom_hline(yintercept = 0.5, 
-             linetype = "dotted", 
-             color = "grey50", 
-             size = 0.5) + 
-  facet_wrap(~trap) +
-  scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
-  scale_y_continuous(limits = c(0, max(TD$Turnover, na.rm = TRUE))) +  
-  labs(title = "Turnover: appearences",  
-       x = "Year", 
-       y = "Turnover appearences",
-       caption = "Species appearences over time by trap") + 
-  My_theme +
-  My_theme +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm"))
+#| label: Plotting overall turnover
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+p <- ggplot(TD, aes(x = Turnover)) + 
+  geom_density(fill = "gray50", alpha = 0.5) +  
+  geom_vline(xintercept = mean(TD$Turnover, na.rm = TRUE), 
+             linetype = "dashed", 
+             color = "black", 
+             size = 1.2) +
+  labs(title = "Turnover Rate Density",
+       x = "Turnover Rate (Δ turnover per year)",  
+       y = "Density",
+       caption = "Dashed line indicates the mean turnover rate") +  
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.title = element_text(size = 14, face = "bold"),
+    legend.text = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+  )
+p
 ```
 
-### Turnover (disappearances) by trap by year
+### Turnover density by trap
 
 ```{r}
-ggplot(TD |> 
-         group_by(trap) |> 
-         filter(n() > 3),
-       aes(x = year, y = Turnover_disapp)) +
-  geom_line() +   
-  geom_smooth(method = "lm") +  
-  geom_smooth(method = "gam", col = "red") +
-  geom_point(size = 2) + 
-  geom_hline(yintercept = 0.5,
-             linetype = "dotted",
-             color = "grey50",
-             size = 0.5) + 
-  facet_wrap(~trap) + 
-  scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3),
-                     minor_breaks = seq(min(TD$year), max(TD$year), by = 1)) +
-  scale_y_continuous(limits = c(0, max(TD$Turnover, na.rm = TRUE))) +  
-  labs(title = "Turnover: disappearences",  
-       x = "Year", 
-       y = "Turnover Disappearences",
-       caption = "Species dissappearences through time by traps") + 
-  My_theme + 
-  My_theme +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm"))
+#| label: Plotting turnover by trap
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+ggplot(TD, aes(x = Turnover, fill = trap)) + 
+  geom_density(alpha = 0.3, colour = NA) +
+  geom_vline(xintercept = mean(TD$Turnover, na.rm = TRUE), 
+             linetype = "dashed", 
+             color = "black", 
+             size = 1.2) +
+  labs(title = "Turnover Rate Density by Trap",
+       x = "Turnover Rate (Δ turnover per year)",  
+       y = "Density",
+       fill = "Trap",
+       colour = "Trap") +  
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.title = element_text(size = 14, face = "bold"),
+    legend.text = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+  )
+
 ```
 
 ### Abundance by trap by year
 
 ```{r}
+#| label: Plotting abundance by year
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
 ggplot(TD |> 
          group_by(trap) |> 
          filter(n() > 3),
        aes(x = year, y = Abund)) +
   geom_line() +   
   geom_smooth(method = "lm") +  
-  geom_smooth(method = "gam", col = "red") +
+  # geom_smooth(method = "gam", col = "red") +
   geom_point(size = 2) + 
   geom_hline(yintercept = 0.5,
              linetype = "dotted", 
@@ -335,44 +544,24 @@ ggplot(TD |>
         axis.ticks.length = unit(0.25, "cm")) 
 ```
 
-### Log abundance (log10 + 1) by trap by year
-
-```{r}
-ggplot(TD |> 
-         group_by(trap) |> 
-         filter(n() > 3),
-       aes(x = year, y = log(Abund + 1))) +
-  geom_line() +
-  geom_smooth(method = "lm") +  
-  geom_smooth(method = "gam", col = "red") +
-  geom_point(size = 2) +   
-  # geom_hline(yintercept = 0.5,
-  #            linetype = "dotted",
-  #            color = "grey50",
-  #            size = 0.5) +
-  facet_wrap(~trap, scales = "free_y") + 
-  scale_y_continuous(breaks = seq(min(0), max(10), by = 2)) +
-  scale_x_continuous(breaks = seq(min(TD$year), max(TD$year), by = 3)) +
-  labs(title = "Log abundance",  
-       x = "Year",
-       y = "log(abundance + 1)",
-       caption = "Log abundance through time by trap") + 
-  My_theme +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm")) 
-
-```
-
 ### Species richness by trap by year
 
 ```{r}
+#| label: Plotting species richness by year
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
 ggplot(TD |> 
          group_by(trap) |> 
          filter(n() > 3),
        aes(x = year, y = SppRich)) +
   geom_line() +   
   geom_smooth(method = "lm") +  
-  geom_smooth(method = "gam", col = "red") +
+  # geom_smooth(method = "gam", col = "red") +
   geom_point(size = 2) +   
   # geom_hline(yintercept = 0.5,
   #            linetype = "dotted", 
@@ -392,13 +581,21 @@ ggplot(TD |>
 ### (Individual-based) rarefied species richness by trap by year
 
 ```{r}
+#| label: Plotting rarefied species richness by year
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
 ggplot(TD |> 
          group_by(trap) |> 
          filter(n() > 3),
        aes(x = year, y = rare.SppRich)) +
   geom_line() +   
   geom_smooth(method = "lm") +  
-  geom_smooth(method = "gam", col = "red") +
+  # geom_smooth(method = "gam", col = "red") +
   geom_point(size = 2) +   
   # geom_hline(yintercept = 0.5, 
   #            linetype = "dotted", 
@@ -419,51 +616,55 @@ ggplot(TD |>
 
 ## Calculation of rarefaction curves
 
+This code chunk takes a long time to run, so I include it here as non-executable code. Below this chunk is an rds file with the outputs.
+
+``` r
+ept_wide_red <- ept_wide |>
+  select(-O, -F) |>
+  column_to_rownames(var = "sp_name") |>
+  data.frame() |>
+  print()                                                          # remove traps with lower quality data: Trap D, F, & Quelle
+ept_cum.rare = iNEXT(ept_wide_red, q = 0, datatype = "abundance")  # calculate accumulation curves
+write_rds(ept_cum.rare, "Outputs/rarefaction_ept.rds")             # save output for quicker loading next time
+```
+
 ```{r}
-# ept_wide_red <- ept_wide |>
-#   select(-O, -F) |>
-#   column_to_rownames(var = "sp_name") |>
-#   data.frame() |>
-#   print()                                                          # remove traps with lower quality data: Trap D, F, & Quelle
-# ept_cum.rare = iNEXT(ept_wide_red, q = 0, datatype = "abundance")  # calculate accumulation curves
-# write_rds(ept_cum.rare, "Outputs/rarefaction_ept.rds")             # save output for quicker loading next time
+#| label: Loading precalculated rarefaction curves
+#| warning: false
+#| message: false
+#| code-fold: true
+
 ept_cum.rare <- readRDS("Outputs/rarefaction_ept.rds")               # load saved output
 ```
 
-### Check outputs
+## Check outputs
 
-#### Basic information
+### Basic information
 
-```{r}
+Not super necessary for our purposes
+
+``` r
 ept_cum.rare$DataInfo
-```
-
-#### Asymptotic diversity estimates.
-
-```{r}
 ept_cum.rare$AsyEst
 ```
 
 ## Plotting
 
-### Plotting parameters
-
-```{r}
-My_theme <- theme(panel.background = element_blank(),
-                  panel.border = element_rect(fill = NA, linewidth = 1.25),
-                  strip.background = element_rect(fill = "white", 
-                                                  color = "white", linewidth = 1.25),
-                  legend.position = "right",
-                  text = element_text(size = 16),
-                  axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
 ### All accumulation curves in one plot
 
 ```{r}
+#| label: Plotting all accumulation curves in the same plot
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
 options(scipen = 999)                                               # Increase penalty to avoid scientific notation
 ept_p <- ggiNEXT(ept_cum.rare, type = 1, color.var = "Assemblage")
 ept_p <- ept_p + ggtitle("EPT")
+ept_p <- ept_p + My_theme
 ept_p <- ept_p + theme(legend.position = "bottom")
 ept_p
 ```
@@ -471,9 +672,1582 @@ ept_p
 ### Accumulation curves in separate plots
 
 ```{r}
+#| label: Plotting all accumulation curves in seperate plots
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 16
+#| fig-format: svg
+
 options(scipen = 999)                                               # Increase penalty to avoid scientific notation
 ept_p1 <- ggiNEXT(ept_cum.rare, facet.var = "Assemblage", grey = T)
 ept_p1 <- ept_p1 + ggtitle("EPT")
+ept_p1 <- ept_p1 + My_theme
 ept_p1 <- ept_p1 + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
 ept_p1
+```
+
+# Modelling
+
+## Exploring the data
+
+### Missing values
+
+```{r}
+#| label: Missing values
+#| code-fold: true
+
+TD |> 
+  group_by(trap) |> 
+  summarise(across(c(Abund, SppRich, Turnover, year), 
+                   ~ 100 * sum(is.na(.)) / n(), 
+                   .names = "missing_{.col}"))
+# Nice!!!
+```
+
+There are NA values, including some \~6% in turnover because the first year is always missing for each trap
+
+### Data distribution
+
+```{r}
+#| label: Temporal replication (distribution)
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
+trap_periods <- TD |> 
+  group_by(trap) |> 
+  summarise(
+    start_year = min(year),
+    end_year = max(year),
+    obs_period = end_year - start_year + 1,  # Adding 1 since we want to include both start and end years
+    n_years = n_distinct(year)  # This will show actual number of years sampled
+  ) |> 
+  mutate(
+    missing_years = obs_period - n_years  # This will show gaps in sampling if any
+  )
+
+TD_sum <- TD |> 
+   with(table(trap, year)) |> 
+   as_tibble() |> 
+   arrange(trap)
+
+TD_sum |> 
+     ggplot(aes(x = year, y = n, group = trap)) +
+      geom_line() +
+      geom_point() +
+      facet_wrap(~trap) +
+      theme_bw() +
+      ylab("Number of samples") +
+      xlab("Year") +
+      theme(
+        axis.title = element_text(family = "Arial", size = 12),
+        axis.text.y = element_text(family = "Arial", size = 12),
+        axis.text.x = element_text(family = "Arial", size = 8, angle = 45, vjust = 0.5, hjust = 1),
+        strip.text = element_text(family = "Arial", size = 14, face = "bold"))
+
+trap_periods <- TD |> 
+  group_by(trap) |> 
+  summarise(
+    start_year = min(year),
+    end_year = max(year),
+    obs_period = end_year - start_year + 1,  # Adding 1 since we want to include both start and end years
+    n_years = n_distinct(year)  # This will show actual number of years sampled
+  ) |> 
+  mutate(
+    missing_years = obs_period - n_years  # This will show gaps in sampling if any
+  )
+```
+
+### Outliers
+
+```{r}
+#| label: Outliers
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
+MyVar <- c("SppRich", "Abund", "Turnover", "year")
+Mydotplot(TD[, MyVar])
+```
+
+### Relationships
+
+#### Abundance \~ year
+
+```{r}
+#| label: Relationship between abundance and year
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
+p1 <- TD |>
+  ggplot(aes(y = Abund, x = year)) +
+  geom_smooth(method = "gam") +
+  geom_smooth(method = "lm", col = "red") +
+  labs(y = "EPT abundance",
+       x = "Time") +
+  geom_jitter(shape = 19, size = 3.5, height = 0.5,
+              width = 0.5, alpha = 0.5) +
+  scale_x_continuous(limits = c(1965, 2005)) +
+  ylim(range(TD$Abund)) +
+  My_theme
+p1
+# non-linear relationship
+```
+
+#### And, Abundance \~ year, factored by trap
+
+```{r}
+#| label: Relationship between abundance and year by trap
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
+p1 + facet_wrap(~trap)
+```
+
+#### Species richness \~ year
+
+```{r}
+#| label: Relationship between species richness and year
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
+p1 <- TD |>
+  ggplot(aes(y = SppRich, x = year)) +
+  geom_smooth(method = "gam") +
+  geom_smooth(method = "lm", col = "red") +
+  labs(y = "EPT species richness",
+       x = "Time") +
+  geom_jitter(shape = 19, size = 3.5, height = 0.5,
+              width = 0.5, alpha = 0.5) +
+  scale_x_continuous(limits = c(1965, 2005)) +
+  ylim(range(TD$SppRich)) +
+  My_theme
+p1
+# non-linear relationship
+```
+
+#### And, Species richness \~ year, factored by trap
+
+```{r}
+#| label: Relationship between species richness and year by trap
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
+p1 + facet_wrap(~trap)
+```
+
+#### Turnover \~ year
+
+```{r}
+#| label: Relationship between turnover and year
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
+p1 <- TD |>
+  ggplot(aes(y = Turnover, x = year)) +
+  geom_smooth(method = "gam") +
+  geom_smooth(method = "lm", col = "red") +
+  labs(y = "EPT species turnover",
+       x = "Time") +
+  geom_jitter(shape = 19, size = 3.5, height = 0.5,
+              width = 0.5, alpha = 0.5) +
+  scale_x_continuous(limits = c(1965, 2005)) +
+  ylim(range(TD$Turnover)) +
+  My_theme
+p1
+# postive, non-linear relationship
+```
+
+#### And, Turnover \~ year, factored by trap
+
+```{r}
+#| label: Relationship between turnover and year by trap
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
+p1 + facet_wrap(~trap)
+```
+
+### Normality
+
+```{r}
+#| label: Normality
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 16
+#| fig-format: svg
+
+# First save the plots
+p1 <- TD |> 
+  ggplot(aes(Abund)) +
+  geom_freqpoly(bins = 15) +
+  labs(x = "EPT abundance",
+       y = "Frequency",
+       tag = "A") +  # Add panel label
+  My_theme
+
+p2 <- TD |> 
+  ggplot(aes(SppRich)) +
+  geom_freqpoly(bins = 15) +
+  labs(x = "EPT species richness",
+       y = "Frequency",
+       tag = "B") +  # Add panel label
+  My_theme
+
+p3 <- TD |> 
+  ggplot(aes(Turnover)) +
+  geom_freqpoly(bins = 15) +
+  labs(x = "EPT species turnover",
+       y = "Frequency",
+       tag = "C") +  # Add panel label
+  My_theme
+
+# Set up the plotting layout
+# This creates a 1 row, 3 column layout
+par(mfrow = c(1, 3))
+
+# Print all plots
+gridExtra::grid.arrange(p1, p2, p3, ncol = 3)
+
+# Poisson distribution should would for species richness and abundance, while the beta distribution should work for turnover data
+```
+
+### Zero inflation
+
+```{r}
+#| label: Zero inflation
+#| code-fold: true
+# How many zeros do we have?
+TD |> summarise(percentage_zero = sum(Abund == 0) / n() * 100)
+# Nice!!!
+```
+
+## House keeping
+
+```{r}
+#| label: Data standardization
+#| code-fold: true
+#| include: false
+#| output: false
+#| echo: false
+
+unique_years <- sort(unique(TD$year))
+TD <- TD |> 
+  mutate(
+    year.std         = MyStd(year),
+    fyear            = factor(year, levels = unique_years),                           # make year a factor
+    cyear            = year - median(year),                                           # centered year
+    ftrap            = factor(trap, levels = c("A", "B", "C", "E", "G", "I", "III"))) # make trap a factor
+```
+
+```{r}
+#| label: Standardization check
+#| code-fold: true
+#| include: false
+#| output: false
+#| echo: false
+
+# Compute mean and standard deviation of TD$year
+year_mean <- mean(TD$year)
+year_sd <- sd(TD$year)
+
+# Back-transform to check if we recover the same values
+min_year_back <- min(TD$year.std) * year_sd + year_mean
+max_year_back <- max(TD$year.std) * year_sd + year_mean
+
+# Print results
+data.frame(
+  Expected_Min_Year = min(TD$year),
+  Backtransformed_Min_Year = min_year_back,
+  
+  Expected_Max_Year = max(TD$year),
+  Backtransformed_Max_Year = max_year_back
+)
+
+plot(TD$year, TD$year.std)
+```
+
+```{r}
+#| label: Check data distributions
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+# Check distribution of EPT abundance
+hist(TD$Abund, main = "Distribution of EPT Abundance", breaks = 30, col = "steelblue")
+hist(TD$SppRich, main = "Distribution of EPT species richness", breaks = 30, col = "steelblue")
+hist(TD$Turnover, main = "Distribution of EPT Turnover", breaks = 30, col = "steelblue")
+```
+
+# Abundance models
+
+## Fit the abundance models in GLMTMB
+
+```{r}
+#| label: Fitting models for abundance
+#| code-fold: true
+
+# Fit overall model with trap as a random effect
+mod_overall <- glmmTMB(Abund ~ poly(year.std, 3), 
+                        family = nbinom2, 
+                        data = TD)
+
+mod_overall1 <- glmmTMB(Abund ~ poly(year.std, 3) + (1 | ftrap), 
+                        family = nbinom2, 
+                        data = TD)
+
+mod_overall2 <- glmmTMB(Abund ~ bs(year.std) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
+                        family = nbinom2, 
+                        data = TD)
+
+mod_overall3 <- glmmTMB(Abund ~ poly(year.std, 3) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
+                        family = nbinom2, 
+                        data = TD)
+
+mod_overall4 <- glmmTMB(Abund ~ poly(year.std, 5) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
+                        family = nbinom2, 
+                        data = TD)
+
+mod_overall5 <- glmmTMB(Abund ~ year.std + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
+                        family = nbinom2, 
+                        data = TD)
+
+AIC(mod_overall, mod_overall1, mod_overall2, mod_overall3, mod_overall4, mod_overall5)
+
+# Fit separate models for each trap
+trap_models <- lapply(levels(TD$ftrap), function(t) {
+  glmmTMB(Abund ~ 
+          year.std,
+          # poly(year.std, 5),
+          family = nbinom2, 
+          data = TD[TD$ftrap == t, ])
+})
+
+# Store model names
+names(trap_models) <- levels(TD$ftrap)
+```
+
+## Model validation
+
+### Overall model
+
+```{r}
+#| label: Abundance overall model validation
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+# Simulated residual diagnostics
+simulation_output <- simulateResiduals(mod_overall3)
+plot(simulation_output)
+
+# Check for temporal autocorrelation in residuals
+acf(residuals(mod_overall3), main = "Autocorrelation of Residuals")
+
+# Plot the scaled quantile residuals versus each covariate in the model.
+plotResiduals(simulation_output, form = TD$year)   # Some trouble.
+plotResiduals(simulation_output, form = TD$ftrap)  # Some trouble.
+```
+
+### Individual trap models
+
+```{r}
+#| label: Abundance trap specific model validations
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| include: false
+#| output: false
+#| echo: false
+
+# Validate individual trap models
+validation_results <- lapply(trap_models, function(model) {
+  simulateResiduals(model)
+})
+par(mfrow = c(3, 3))  # Arrange plots in a grid
+for (i in seq_along(trap_models)) {
+  plot(validation_results[[i]])
+}
+par(mfrow = c(1, 1))
+```
+
+## Model outputs
+
+```{r}
+#| label: Abundance model outputs
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+# Table 1: Overall Model
+tab_model(
+  mod_overall3,
+  # transform = backtransform,
+  show.se = TRUE,  
+  show.aic = TRUE,
+  show.loglik = TRUE, 
+  show.re.var = FALSE,  # Don't show random effects
+  p.style = "numeric",  
+  string.pred = "Predictor",
+  string.est = "Estimate",
+  title = "Conditional Model Results for Overall EPT Abundance",
+  CSS = list(
+    css.table = "width: 100%;",
+    css.tdata = "padding: 3px;"
+  )
+)
+
+# Table 2: Trap-specific Models
+tab_model(
+  trap_models,
+  # tranform = backtransform,
+  show.aic = TRUE,
+  show.r2 = TRUE,
+  string.pred = "Predictor",
+  string.est = "Estimate",
+  dv.labels = names(trap_models),
+  title = "Trap-specific EPT Abundance Model Results",
+  CSS = list(
+    css.table = "width: 100%;",
+    css.tdata = "padding: 3px;"
+  )
+)
+```
+
+## Predictions
+
+```{r}
+#| label: Make abundance model predictions
+#| code-fold: true
+#| include: true
+
+# Get min/max year per trap
+trap_ranges <- TD |> 
+  group_by(ftrap) |> 
+  summarise(
+    min_year = min(year.std),
+    max_year = max(year.std)
+  )
+
+# Generate predictions for each trap model, using observed time periods only
+trap_predictions <- lapply(names(trap_models), function(t) {
+  # Get the observed time range for this trap
+  time_range <- trap_ranges %>% filter(ftrap == t)
+  
+  new_data <- expand.grid(
+    year.std = seq(time_range$min_year, time_range$max_year, length.out = 300),
+    ftrap = t
+  )
+  
+  preds <- predict(trap_models[[t]], newdata = new_data, type = "response", se.fit = TRUE)
+  
+  new_data <- new_data %>%
+    mutate(
+      predicted = preds$fit,
+      conf.low = preds$fit - 1.96 * preds$se.fit,
+      conf.high = preds$fit + 1.96 * preds$se.fit
+    )
+  
+  return(new_data)
+})
+
+# Combine all trap model predictions into one dataframe
+MyData_traps <- bind_rows(trap_predictions)
+
+# Create prediction data for the overall model (covering the full time period)
+MyData_overall <- data.frame(
+  year.std = seq(min(TD$year.std), max(TD$year.std), length.out = 300),
+  ftrap = factor("Overall", levels = c("Overall", levels(TD$ftrap)))
+)
+
+# Get predictions for the overall model
+pred_overall <- predict(mod_overall3, newdata = MyData_overall, type = "response", se.fit = TRUE, allow.new.levels = TRUE)
+MyData_overall <- MyData_overall %>%
+  mutate(
+    predicted = pred_overall$fit,
+    conf.low = pred_overall$fit - 1.96 * pred_overall$se.fit,
+    conf.high = pred_overall$fit + 1.96 * pred_overall$se.fit
+  )
+```
+
+### Plot model
+
+```{r}
+#| label: Plot abundance models with original, unstandardized variables
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| include: false
+
+# Define color and shape palette for traps
+trap_colours <- hue_pal()(length(unique(TD$ftrap)))
+names(trap_colours) <- levels(TD$ftrap)
+trap_shapes <- setNames(rep(16:19, length.out = length(trap_colours)), levels(TD$ftrap))
+
+# Plot: Individual Trap Trends & Overall Trend with Confidence Intervals
+ggplot() +
+  # geom_ribbon(data = MyData_traps, aes(x = year.std, ymin = conf.low, ymax = conf.high, fill = ftrap), alpha = 0.2) +
+  geom_line(data = MyData_traps, aes(x = year.std, y = predicted, colour = ftrap), size = 1, alpha = 1) +
+  geom_point(data = TD, aes(x = year.std, y = Abund, colour = ftrap, shape = ftrap, fill = ftrap), size = 5, alpha = 0.4) +
+  geom_ribbon(data = MyData_overall, aes(x = year.std, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
+  geom_line(data = MyData_overall, aes(x = year.std, y = predicted, linetype = ftrap), colour = "black", size = 2) +
+  labs(
+    title = "EPT Abundance Trends: Trap-Specific & Overall",
+    x = "Standardized Year",
+    y = "Predicted Abundance",
+    colour = "Trap",
+    fill = "Trap",
+    shape = "Trap",
+    linetype = "Model"
+  ) +
+  scale_colour_manual(values = trap_colours) +
+  scale_fill_manual(values = trap_colours) +  
+  scale_shape_manual(values = trap_shapes) +  
+  scale_linetype_manual(values = c("Overall" = "solid", setNames(rep("solid", length(trap_colours)), names(trap_colours)))) +
+    guides(
+    shape = guide_legend(title = "Trap trends", override.aes = list(size = 5, colour = trap_colours, fill = trap_colours, alpha = 1)), 
+    fill = guide_legend(title = "Trap trends", override.aes = list(alpha = 0.3)),  
+    colour = guide_legend(title = "Trap trends"),
+    linetype = guide_legend(title = "Overall trend", override.aes = list(size = 1.5))
+  ) +
+  scale_x_continuous(breaks = seq(floor(min(TD$year.std)), ceiling(max(TD$year.std)), by = 0.5)) +
+  scale_y_continuous(breaks = seq(0, 45000, by = 5000)) +
+  coord_cartesian(ylim = c(0, 45000)) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    axis.title = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 14),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16, face = "bold"),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
+  )
+
+```
+
+### Plot model with back transformation
+
+```{r}
+#| label: Plot abundance models with back transformed variables
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+# Backtransform year.std to original year scale
+TD_mean_year <- mean(TD$year)
+TD_sd_year <- sd(TD$year)
+
+MyData_traps <- MyData_traps %>%
+  mutate(year = (year.std * TD_sd_year) + TD_mean_year)
+
+MyData_overall <- MyData_overall %>%
+  mutate(year = (year.std * TD_sd_year) + TD_mean_year)
+
+# Define color and shape palette for traps
+trap_colours <- hue_pal()(length(unique(TD$ftrap)))
+names(trap_colours) <- levels(TD$ftrap)
+trap_shapes <- setNames(rep(16:19, length.out = length(trap_colours)), levels(TD$ftrap))
+
+# Plot: Individual Trap Trends & Overall Trend with Confidence Intervals
+ggplot() +
+  # Confidence ribbons for individual trap models
+  # geom_ribbon(data = MyData_traps, aes(x = year, ymin = conf.low, ymax = conf.high, fill = ftrap), alpha = 0.2) +
+  
+  # Individual trap predictions
+  geom_line(data = MyData_traps, aes(x = year, y = predicted, colour = ftrap), size = 1, alpha = 1) +
+  
+  # Raw data points for reference (backtransformed x-axis)
+  geom_point(data = TD, aes(x = year, y = Abund, colour = ftrap, shape = ftrap, fill = ftrap), size = 5, alpha = 0.4) +
+  
+  # Confidence interval for overall trend
+  geom_ribbon(data = MyData_overall, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
+  
+  # Overall model trend line
+  geom_line(data = MyData_overall, aes(x = year, y = predicted, linetype = ftrap), colour = "black", size = 2) +
+
+  labs(
+    title = "EPT Abundance Trends: Trap-Specific & Overall",
+    x = "Year",  # Now in original units
+    y = "Predicted Abundance",
+    colour = "Trap",
+    fill = "Trap",
+    shape = "Trap",
+    linetype = "Model"
+  ) +
+  
+  scale_colour_manual(values = trap_colours) +
+  scale_fill_manual(values = trap_colours) +  
+  scale_shape_manual(values = trap_shapes) +  
+  scale_linetype_manual(values = c("Overall" = "solid", setNames(rep("solid", length(trap_colours)), names(trap_colours)))) +
+  
+  guides(
+    shape = guide_legend(title = "Trap trends", override.aes = list(size = 5, colour = trap_colours, fill = trap_colours, alpha = 1)), 
+    fill = guide_legend(title = "Trap trends", override.aes = list(alpha = 0.3)),  
+    colour = guide_legend(title = "Trap trends"),
+    linetype = guide_legend(title = "Overall trend", override.aes = list(size = 1.5))
+  ) +
+  
+  # Ensure predictions span the full range (1970-2005)
+  scale_x_continuous(limits = c(1970, 2005), breaks = seq(1970, 2005, by = 5)) +
+  
+  scale_y_continuous(breaks = seq(0, 45000, by = 5000)) +
+  coord_cartesian(ylim = c(0, 45000)) +
+  
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    axis.title = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 14),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16, face = "bold"),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
+  )
+```
+
+```{r}
+#| label: Compare abundance model outputs with standard ggplot2 outputs
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| include: false
+#| output: false
+#| echo: false
+
+TD |>
+  ggplot(aes(y = Abund, x = year, colour = ftrap, fill = ftrap)) +
+  geom_smooth(method = "lm", se = TRUE, aes(colour = ftrap), method.args = list(family = "nbinomial")) +
+  geom_jitter(shape = 19, size = 3.5, height = 0.5,
+              width = 0.5, alpha = 0.5) +
+  labs(y = "EPT Abundance",
+       x = "Year",
+       colour = "Trap",
+       fill = "Trap") +
+  scale_x_continuous(limits = c(1969, 2005)) +
+  ylim(range(TD$Abund)) +
+  My_theme +
+  scale_colour_manual(values = trap_colours, name = "Trap") +
+  scale_fill_manual(values = trap_colours, name = "Trap") +
+  guides(
+    colour = guide_legend(title = "Trap", override.aes = list(size = 4, alpha = 1)),
+    fill = "none"
+  )
+
+TD |>
+  ggplot(aes(y = Abund, x = year)) +
+  geom_smooth(method = "lm",  se = TRUE, method.args = list(family = "nbinomial")) +
+  geom_jitter(shape = 19, size = 3.5, height = 0.5,
+              width = 0.5, alpha = 0.5) +
+  labs(y = "EPT Abundance",
+       x = "Year",
+       colour = "Trap",
+       fill = "Trap") +
+  scale_x_continuous(limits = c(1969, 2005)) +
+  ylim(range(TD$Abund)) +
+  My_theme +
+  guides(
+    colour = guide_legend(title = "Trap", override.aes = list(size = 4, alpha = 1)),
+    fill = "none"
+  )
+```
+
+# Species Richness Models
+
+## Species richness models in GLMTMB
+
+```{r}
+#| label: Choose best distribution to use for species richness models
+#| code-fold: true
+#| include: false
+
+# Poisson Model (may be too restrictive)
+mod_poisson <- glmmTMB(SppRich ~ bs(year.std), 
+                        family = poisson, 
+                        data = TD)
+
+# Gamma Model (if data is continuous and positive)
+mod_gamma <- glmmTMB(SppRich ~ bs(year.std), 
+                        family = Gamma(link = "log"), 
+                        data = TD)
+
+# Gaussian Model (if species richness is approximately normal)
+mod_gaussian <- glmmTMB(SppRich ~ bs(year.std), 
+                        family = gaussian, 
+                        data = TD)
+
+# Compare models using AIC
+AIC(mod_poisson, mod_gamma, mod_gaussian)
+```
+
+## Fit Gaussian model in GLMTMB
+
+```{r}
+#| label: Fitting models for species richness
+#| code-fold: true
+
+# Base model (no random effects)
+spp_mod_overall <- glmmTMB(SppRich ~ bs(year.std), 
+                        family = gaussian, 
+                        data = TD)
+
+# Model with trap as a random effect
+spp_mod_overall1 <- glmmTMB(SppRich ~ bs(year.std) + (1 | ftrap), 
+                        family = gaussian, 
+                        data = TD)
+
+# Model with trap as a random effect and AR(1) autocorrelation
+spp_mod_overall2 <- glmmTMB(SppRich ~ bs(year.std) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
+                        family = gaussian, 
+                        data = TD)
+
+# Model with trap as a random effect and AR(1) autocorrelation
+spp_mod_overall3 <- glmmTMB(SppRich ~ poly(year.std, 3) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
+                        family = gaussian, 
+                        data = TD)
+
+# Model with trap as a random effect and AR(1) autocorrelation
+spp_mod_overall4 <- glmmTMB(SppRich ~ poly(year.std, 5) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
+                        family = gaussian, 
+                        data = TD)
+
+# Compare models
+AIC(spp_mod_overall, spp_mod_overall1, spp_mod_overall2, spp_mod_overall3, spp_mod_overall4)
+
+spp_trap_models <- lapply(levels(TD$ftrap), function(t) {
+  glmmTMB(SppRich ~ year.std, 
+          family = gaussian, 
+          data = TD[TD$ftrap == t, ])
+})
+
+# Store model names
+names(spp_trap_models) <- levels(TD$ftrap)
+
+```
+
+## Model validation
+
+### Overall model
+
+```{r}
+#| label: Species richness overall model validation
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+# Simulated residual diagnostics
+simulation_output <- simulateResiduals(spp_mod_overall3)
+plot(simulation_output)
+
+# Check for temporal autocorrelation in residuals
+acf(residuals(spp_mod_overall3), main = "Autocorrelation of Residuals")
+
+# Plot the scaled quantile residuals versus each covariate in the model.
+plotResiduals(simulation_output, form = TD$year)   # Some trouble.
+plotResiduals(simulation_output, form = TD$ftrap)  # Some trouble.
+```
+
+### Individual trap models
+
+```{r}
+#| label: Species richness trap specific model validations
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| include: false
+#| output: false
+#| echo: false
+
+# Validate individual trap models
+validation_results <- lapply(spp_trap_models, function(model) {
+  simulateResiduals(model)
+})
+
+# Plot residual diagnostics for each trap model
+par(mfrow = c(3, 3))  # Arrange plots in a grid
+for (i in seq_along(spp_trap_models)) {
+  plot(validation_results[[i]])
+}
+par(mfrow = c(1, 1))
+```
+
+## Model outputs
+
+```{r}
+#| label: Species richness model outputs
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+# Define backtransformation function
+backtransform <- function(x) {
+  original_mean <- mean(TD$year, na.rm = TRUE)
+  original_sd <- sd(TD$year, na.rm = TRUE)
+  x * original_sd + original_mean
+}
+
+
+# Table 1: Overall Model
+tab_model(
+  spp_mod_overall3,
+  # transform = backtransform,
+  show.se = TRUE,  
+  show.aic = TRUE,
+  show.loglik = TRUE, 
+  show.re.var = FALSE,  # Don't show random effects
+  p.style = "numeric",  
+  string.pred = "Predictor",
+  string.est = "Estimate",
+  title = "Conditional Model Results for Overall EPT Species Richness",
+  CSS = list(
+    css.table = "width: 100%;",
+    css.tdata = "padding: 3px;"
+  )
+)
+
+# Table 2: Trap-specific Models
+tab_model(
+  spp_trap_models,
+  # tranform = backtransform,
+  show.aic = TRUE,
+  show.r2 = TRUE,
+  string.pred = "Predictor",
+  string.est = "Estimate",
+  dv.labels = names(spp_trap_models),
+  title = "Trap-specific EPT Species Richness Model Results",
+  CSS = list(
+    css.table = "width: 100%;",
+    css.tdata = "padding: 3px;"
+  )
+)
+```
+
+## Predictions
+
+```{r}
+#| label: Make species richness model predictions
+#| code-fold: true
+#| include: true
+
+# Get min/max year per trap
+trap_ranges <- TD |> 
+  group_by(ftrap) |> 
+  summarise(
+    min_year = min(year.std),
+    max_year = max(year.std)
+  )
+
+# Generate predictions for each trap model
+trap_predictions <- lapply(names(spp_trap_models), function(t) {
+  time_range <- trap_ranges %>% filter(ftrap == t)
+  
+  new_data <- expand.grid(
+    year.std = seq(time_range$min_year, time_range$max_year, length.out = 300),
+    ftrap = t
+  )
+  
+  preds <- predict(spp_trap_models[[t]], newdata = new_data, type = "response", se.fit = TRUE)
+  
+  new_data <- new_data %>%
+    mutate(
+      predicted = preds$fit,
+      conf.low = predicted - 1.96 * preds$se.fit,
+      conf.high = predicted + 1.96 * preds$se.fit
+    )
+  
+  return(new_data)
+})
+
+# Combine all predictions into one dataframe
+MyData_traps <- bind_rows(trap_predictions)
+
+# Create new data for overall model
+MyData_overall <- data.frame(
+  year.std = seq(min(TD$year.std), max(TD$year.std), length.out = 300),
+  ftrap = factor("Overall", levels = c("Overall", levels(TD$ftrap)))
+)
+
+# Get predictions
+pred_overall <- predict(spp_mod_overall3, 
+                        newdata = MyData_overall, 
+                        type = "response", 
+                        se.fit = TRUE, 
+                        allow.new.levels = TRUE)
+
+# Store predictions
+MyData_overall <- MyData_overall %>%
+  mutate(
+    predicted = pred_overall$fit,
+    conf.low = predicted - 1.96 * pred_overall$se.fit,
+    conf.high = predicted + 1.96 * pred_overall$se.fit
+  )
+```
+
+## Plot model
+
+```{r}
+#| label: Plot species richness models with original, unstandardized variables
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| include: false
+
+# Ensure ftrap is a factor
+MyData_traps$ftrap <- factor(MyData_traps$ftrap, levels = levels(TD$ftrap))
+MyData_overall$ftrap <- factor("Overall", levels = c("Overall", levels(TD$ftrap)))
+
+# Define color and shape palette for traps
+trap_colours <- hue_pal()(length(unique(TD$ftrap)))
+names(trap_colours) <- levels(TD$ftrap)
+trap_shapes <- setNames(rep(16:19, length.out = length(trap_colours)), levels(TD$ftrap))
+
+# Plot: Individual Trap Trends & Overall Trend with Confidence Intervals
+ggplot() +
+  geom_line(data = MyData_traps, aes(x = year.std, y = predicted, colour = ftrap), size = 1, alpha = 1) +
+  geom_point(data = TD, aes(x = year.std, y = SppRich, colour = ftrap, shape = ftrap, fill = ftrap), size = 5, alpha = 0.4) +
+  geom_ribbon(data = MyData_overall, aes(x = year.std, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
+  geom_line(data = MyData_overall, aes(x = year.std, y = predicted, linetype = ftrap), colour = "black", size = 2) +
+  labs(
+    title = "EPT Richness Trends: Trap-Specific & Overall",
+    x = "Standardized Year",
+    y = "Predicted Species Richness",
+    colour = "Trap",
+    fill = "Trap",
+    shape = "Trap",
+    linetype = "Model"
+  ) +
+  scale_colour_manual(values = trap_colours) +
+  scale_fill_manual(values = trap_colours) +  
+  scale_shape_manual(values = trap_shapes) +  
+  scale_linetype_manual(values = c("Overall" = "solid", setNames(rep("solid", length(trap_colours)), names(trap_colours)))) +
+  guides(
+    shape = guide_legend(title = "Trap trends", override.aes = list(size = 5, colour = trap_colours, fill = trap_colours, alpha = 1)), 
+    fill = guide_legend(title = "Trap trends", override.aes = list(alpha = 0.3)),  
+    colour = guide_legend(title = "Trap trends"),
+    linetype = guide_legend(title = "Overall trend", override.aes = list(size = 1.5))
+  ) +
+  scale_x_continuous(breaks = seq(floor(min(TD$year.std)), ceiling(max(TD$year.std)), by = 0.5)) +
+  scale_y_continuous(breaks = seq(20, 60, by = 10)) +
+  coord_cartesian(ylim = c(20, 60)) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    axis.title = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 14),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16, face = "bold"),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
+  )
+```
+
+## **Plot model with back transformation**
+
+```{r}
+#| label: Plot species richness models with back transformed variables
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+# Backtransform year.std to original year scale
+TD_mean_year <- mean(TD$year)
+TD_sd_year <- sd(TD$year)
+
+MyData_traps <- MyData_traps %>%
+  mutate(year = (year.std * TD_sd_year) + TD_mean_year)
+
+MyData_overall <- MyData_overall %>%
+  mutate(year = (year.std * TD_sd_year) + TD_mean_year)
+
+# Define color and shape palette for traps
+trap_colours <- hue_pal()(length(unique(TD$ftrap)))
+names(trap_colours) <- levels(TD$ftrap)
+trap_shapes <- setNames(rep(16:19, length.out = length(trap_colours)), levels(TD$ftrap))
+
+# Plot: Individual Trap Trends & Overall Trend with Confidence Intervals
+ggplot() +
+  geom_line(data = MyData_traps, aes(x = year, y = predicted, colour = ftrap), size = 1, alpha = 1) +
+  geom_point(data = TD, aes(x = year, y = SppRich, colour = ftrap, shape = ftrap, fill = ftrap), size = 5, alpha = 0.4) +
+  geom_ribbon(data = MyData_overall, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
+  geom_line(data = MyData_overall, aes(x = year, y = predicted, linetype = ftrap), colour = "black", size = 2) +
+  labs(
+    title = "EPT Richness Trends: Trap-Specific & Overall",
+    x = "Standardized Year",
+    y = "Predicted Species Richness",
+    colour = "Trap",
+    fill = "Trap",
+    shape = "Trap",
+    linetype = "Model"
+  ) +
+  scale_colour_manual(values = trap_colours) +
+  scale_fill_manual(values = trap_colours) +  
+  scale_shape_manual(values = trap_shapes) +  
+  scale_linetype_manual(values = c("Overall" = "solid", setNames(rep("solid", length(trap_colours)), names(trap_colours)))) +
+  guides(
+    shape = guide_legend(title = "Trap trends", override.aes = list(size = 5, colour = trap_colours, fill = trap_colours, alpha = 1)), 
+    fill = guide_legend(title = "Trap trends", override.aes = list(alpha = 0.3)),  
+    colour = guide_legend(title = "Trap trends"),
+    linetype = guide_legend(title = "Overall trend", override.aes = list(size = 1.5))
+  ) +
+  scale_x_continuous(limits = c(1970, 2005), breaks = seq(1970, 2005, by = 5)) +
+  scale_y_continuous(breaks = seq(20, 60, by = 10)) +
+  coord_cartesian(ylim = c(20, 60)) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    axis.title = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 14),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16, face = "bold"),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
+  )
+```
+
+```{r}
+#| label: Compare species richness model outputs with standard ggplot2 outputs
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| include: false
+#| output: false
+#| echo: false
+
+TD |>
+  ggplot(aes(y = SppRich, x = year, colour = ftrap, fill = ftrap)) +
+  geom_smooth(method = "lm", se = TRUE, aes(colour = ftrap), method.args = list(family = "nbinomial")) +
+  geom_jitter(shape = 19, size = 3.5, height = 0.5,
+              width = 0.5, alpha = 0.5) +
+  labs(y = "EPT Richness",
+       x = "Year",
+       colour = "Trap",
+       fill = "Trap") +
+  scale_x_continuous(limits = c(1969, 2005)) +
+  ylim(range(TD$SppRich)) +
+  My_theme +
+  scale_colour_manual(values = trap_colours, name = "Trap") +
+  scale_fill_manual(values = trap_colours, name = "Trap") +
+  guides(
+    colour = guide_legend(title = "Trap", override.aes = list(size = 4, alpha = 1)),
+    fill = "none"
+  )
+
+TD |>
+  ggplot(aes(y = SppRich, x = year)) +
+  geom_smooth(method = "gam",  se = TRUE) +
+  geom_jitter(shape = 19, size = 3.5, height = 0.5,
+              width = 0.5, alpha = 0.5) +
+  labs(y = "EPT Richness",
+       x = "Year",
+       colour = "Trap",
+       fill = "Trap") +
+  scale_x_continuous(limits = c(1969, 2005)) +
+  ylim(range(TD$SppRich)) +
+  My_theme +
+  guides(
+    colour = guide_legend(title = "Trap", override.aes = list(size = 4, alpha = 1)),
+    fill = "none"
+  )
+```
+
+# Turnover Models
+
+## Turnover models with GLMTMB
+
+```{r}
+#| label: Choose best distribution to use for turnover models
+#| code-fold: true
+#| include: false
+
+TD_turn <- TD %>%
+  filter(complete.cases(.))
+
+# Poisson Model (may be too restrictive)
+mod_poisson <- glmmTMB(Turnover ~ bs(year.std), 
+                        family = poisson, 
+                        data = TD_turn)
+
+# Gamma Model (if data is continuous and positive)
+mod_beta <- glmmTMB(Turnover ~ bs(year.std), 
+                     family = beta_family(link = "logit"), 
+                     data = TD_turn)
+
+# Gaussian Model (if species richness is approximately normal)
+mod_gaussian <- glmmTMB(Turnover ~ bs(year.std), 
+                        family = gaussian, 
+                        data = TD_turn)
+
+# Compare models using AIC
+AIC(mod_poisson, mod_gamma, mod_gaussian)
+```
+
+## Fit Beta model in GLMTMB
+
+```{r}
+#| label: Fitting models for turnover
+#| code-fold: true
+
+# Base model (no random effects)
+turn_mod_overall <- glmmTMB(Turnover ~ bs(year.std), 
+                        family = beta_family(link = "logit"), 
+                        data = TD_turn)
+
+# Model with trap as a random effect
+turn_mod_overall1 <- glmmTMB(Turnover ~ bs(year.std) + (1 | ftrap), 
+                        family = beta_family(link = "logit"), 
+                        data = TD_turn)
+
+# Model with trap as a random effect and AR(1) autocorrelation
+turn_mod_overall2 <- glmmTMB(Turnover ~ bs(year.std) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
+                        family = beta_family(link = "logit"), 
+                        data = TD_turn)
+
+# Model with trap as a random effect and AR(1) autocorrelation
+turn_mod_overall3 <- glmmTMB(Turnover ~ poly(year.std, 3) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
+                        family = beta_family(link = "logit"), 
+                        data = TD_turn)
+
+# Model with trap as a random effect and AR(1) autocorrelation
+turn_mod_overall4 <- glmmTMB(Turnover ~ poly(year.std, 5) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
+                        family = beta_family(link = "logit"), 
+                        data = TD_turn)
+
+# Compare models
+AIC(turn_mod_overall, turn_mod_overall1, turn_mod_overall2, turn_mod_overall3, turn_mod_overall4)
+
+turn_trap_models <- lapply(levels(TD_turn$ftrap), function(t) {
+  glmmTMB(Turnover ~ year.std, 
+          family = beta_family(link = "logit"), 
+          data = TD_turn[TD_turn$ftrap == t, ])
+})
+
+# Store model names
+names(turn_trap_models) <- levels(TD_turn$ftrap)
+```
+
+## Model validation
+
+### Overall model
+
+```{r}
+#| label: Turnover overall model validation
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+# Simulated residual diagnostics
+simulation_output <- simulateResiduals(turn_mod_overall3)
+plot(simulation_output)
+
+# Check for temporal autocorrelation in residuals
+acf(residuals(turn_mod_overall3), main = "Autocorrelation of Residuals")
+
+# Plot the scaled quantile residuals versus each covariate in the model.
+plotResiduals(simulation_output, form = TD_turn$year)   # Some trouble.
+plotResiduals(simulation_output, form = TD_turn$ftrap)  # Some trouble.
+```
+
+### Individual trap models
+
+```{r}
+#| label: Trunover trap specific model validations
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| include: false
+#| output: false
+#| echo: false
+
+# Validate individual trap models
+validation_results <- lapply(turn_trap_models, function(model) {
+  simulateResiduals(model)
+})
+
+# Plot residual diagnostics for each trap model
+par(mfrow = c(3, 3))  # Arrange plots in a grid
+for (i in seq_along(turn_trap_models)) {
+  plot(validation_results[[i]])
+}
+par(mfrow = c(1, 1))
+```
+
+## Model outputs
+
+```{r}
+#| label: Trunover model outputs
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+# Define backtransformation function
+# backtransform <- function(x) {
+#   original_mean <- mean(TD$year, na.rm = TRUE)
+#   original_sd <- sd(TD$year, na.rm = TRUE)
+#   x * original_sd + original_mean
+# }
+
+# Table 1: Overall Model
+tab_model(
+  turn_mod_overall3,
+  # transform = backtransform,
+  show.se = TRUE,  
+  show.aic = TRUE,
+  show.loglik = TRUE, 
+  show.re.var = FALSE,  # Don't show random effects
+  p.style = "numeric",  
+  string.pred = "Predictor",
+  string.est = "Estimate",
+  title = "Conditional Model Results for Overall Turnover",
+  CSS = list(
+    css.table = "width: 100%;",
+    css.tdata = "padding: 3px;"
+  )
+)
+
+# Table 2: Trap-specific Models
+tab_model(
+  turn_trap_models,
+  # tranform = backtransform,
+  show.ci = TRUE,
+  show.aic = TRUE,
+  show.r2 = TRUE,
+  string.pred = "Predictor",
+  string.est = "Estimate",
+  dv.labels = names(turn_trap_models),
+  title = "Trap-specific Turnover Model Results",
+  CSS = list(
+    css.table = "width: 100%;",
+    css.tdata = "padding: 3px;"
+  )
+)
+```
+
+## Predictions
+
+```{r}
+#| label: Make turnover model predictions
+#| code-fold: true
+#| include: true
+
+# Get min/max year per trap
+trap_ranges <- TD_turn |> 
+  group_by(ftrap) |> 
+  summarise(
+    min_year = min(year.std),
+    max_year = max(year.std)
+  )
+
+# Generate predictions for each trap model
+trap_predictions <- lapply(levels(TD_turn$ftrap), function(t) {
+  time_range <- trap_ranges %>% filter(ftrap == t)
+
+  new_data <- expand.grid(
+    year.std = seq(time_range$min_year, time_range$max_year, length.out = 300),
+    ftrap = t
+  )
+
+  preds <- predict(turn_trap_models[[t]], newdata = new_data, type = "response", se.fit = TRUE)
+
+  new_data <- new_data %>%
+    mutate(
+      predicted = preds$fit,
+      conf.low = predicted - 1.96 * preds$se.fit,
+      conf.high = predicted + 1.96 * preds$se.fit
+    )
+
+  return(new_data)
+})
+
+# Combine all predictions into one dataframe
+MyData_traps <- bind_rows(trap_predictions)
+
+# Create a new dataset for predictions across the full time range
+MyData_overall <- data.frame(
+  year.std = seq(min(TD_turn$year.std), max(TD_turn$year.std), length.out = 300),
+  ftrap = factor("Overall", levels = c("Overall", levels(TD_turn$ftrap)))
+)
+
+# Get predictions, allowing new factor levels
+pred_overall <- predict(turn_mod_overall3, 
+                        newdata = MyData_overall, 
+                        type = "response", 
+                        se.fit = TRUE, 
+                        allow.new.levels = TRUE)
+
+# Store predictions with confidence intervals
+MyData_overall <- MyData_overall %>%
+  mutate(
+    predicted = pred_overall$fit,
+    conf.low = predicted - 1.96 * pred_overall$se.fit,
+    conf.high = predicted + 1.96 * pred_overall$se.fit
+  )
+
+```
+
+## Plot model
+
+```{r}
+#| label: Plot turnover models with original, unstandardized variables
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| include: false
+
+# Ensure ftrap is a factor with correct levels
+MyData_traps$ftrap <- factor(MyData_traps$ftrap, levels = levels(TD$ftrap))
+MyData_overall$ftrap <- factor("Overall", levels = c("Overall", levels(TD$ftrap)))
+
+# Define color and shape palette for traps
+trap_colours <- hue_pal()(length(unique(TD$ftrap)))
+names(trap_colours) <- levels(TD$ftrap)
+trap_shapes <- setNames(rep(16:19, length.out = length(trap_colours)), levels(TD$ftrap))
+
+# Convert standardized year back to original year for plotting
+MyData_traps$year <- MyData_traps$year.std * sd(TD$year) + mean(TD$year)
+MyData_overall$year <- MyData_overall$year.std * sd(TD$year) + mean(TD$year)
+TD$year <- TD$year.std * sd(TD$year) + mean(TD$year)
+
+# Plot: Individual Trap Trends & Overall Trend with Confidence Intervals
+ggplot() +
+  geom_line(data = MyData_traps, aes(x = year.std, y = predicted, colour = ftrap), size = 1, alpha = 1) +
+  geom_point(data = TD, aes(x = year.std, y = Turnover, colour = ftrap, shape = ftrap, fill = ftrap), size = 5, alpha = 0.4) +
+  geom_ribbon(data = MyData_overall, aes(x = year.std, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
+  geom_line(data = MyData_overall, aes(x = year.std, y = predicted, linetype = ftrap), colour = "black", size = 2) +
+  labs(
+    title = "EPT Turnover Trends: Trap-Specific & Overall",
+    x = "Year",
+    y = "Predicted Turnover",
+    colour = "Trap",
+    fill = "Trap",
+    shape = "Trap",
+    linetype = "Model"
+  ) +
+  scale_colour_manual(values = trap_colours) +
+  scale_fill_manual(values = trap_colours) +  
+  scale_shape_manual(values = trap_shapes) +  
+  scale_linetype_manual(values = c("Overall" = "solid", setNames(rep("solid", length(trap_colours)), names(trap_colours)))) +
+  guides(
+    shape = guide_legend(title = "Trap trends", override.aes = list(size = 5, colour = trap_colours, fill = trap_colours, alpha = 1)), 
+    fill = guide_legend(title = "Trap trends", override.aes = list(alpha = 0.3)),  
+    colour = guide_legend(title = "Trap trends"),
+    linetype = guide_legend(title = "Overall trend", override.aes = list(size = 1.5))
+  ) +
+  scale_y_continuous(breaks = seq(0, 0.6, by = 0.1)) +
+  coord_cartesian(ylim = c(0, 0.6)) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    axis.title = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 14),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16, face = "bold"),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
+  )
+
+```
+
+## **Plot model with back transformation**
+
+```{r}
+#| label: Plot turnover models with back transformed variables
+#| code-fold: true
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| warning: false
+
+# Ensure ftrap is a factor with correct levels
+MyData_traps$ftrap <- factor(MyData_traps$ftrap, levels = levels(TD$ftrap))
+MyData_overall$ftrap <- factor("Overall", levels = c("Overall", levels(TD$ftrap)))
+
+# Define color and shape palette for traps
+trap_colours <- hue_pal()(length(unique(TD$ftrap)))
+names(trap_colours) <- levels(TD$ftrap)
+trap_shapes <- setNames(rep(16:19, length.out = length(trap_colours)), levels(TD$ftrap))
+
+# Convert standardized year back to original year for plotting
+MyData_traps$year <- MyData_traps$year.std * sd(TD$year) + mean(TD$year)
+MyData_overall$year <- MyData_overall$year.std * sd(TD$year) + mean(TD$year)
+TD$year <- TD$year.std * sd(TD$year) + mean(TD$year)
+
+# Plot: Individual Trap Trends & Overall Trend with Confidence Intervals
+ggplot() +
+  geom_line(data = MyData_traps, aes(x = year, y = predicted, colour = ftrap), size = 1, alpha = 1) +
+  geom_point(data = TD, aes(x = year, y = Turnover, colour = ftrap, shape = ftrap, fill = ftrap), size = 5, alpha = 0.4) +
+  geom_ribbon(data = MyData_overall, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
+  geom_line(data = MyData_overall, aes(x = year, y = predicted, linetype = ftrap), colour = "black", size = 2) +
+  labs(
+    title = "EPT Turnover Trends: Trap-Specific & Overall",
+    x = "Year",
+    y = "Predicted Turnover",
+    colour = "Trap",
+    fill = "Trap",
+    shape = "Trap",
+    linetype = "Model"
+  ) +
+  scale_colour_manual(values = trap_colours) +
+  scale_fill_manual(values = trap_colours) +  
+  scale_shape_manual(values = trap_shapes) +  
+  scale_linetype_manual(values = c("Overall" = "solid", setNames(rep("solid", length(trap_colours)), names(trap_colours)))) +
+  guides(
+    shape = guide_legend(title = "Trap trends", override.aes = list(size = 5, colour = trap_colours, fill = trap_colours, alpha = 1)), 
+    fill = guide_legend(title = "Trap trends", override.aes = list(alpha = 0.3)),  
+    colour = guide_legend(title = "Trap trends"),
+    linetype = guide_legend(title = "Overall trend", override.aes = list(size = 1.5))
+  ) +
+  scale_x_continuous(limits = c(1970, 2005), breaks = seq(1970, 2005, by = 5)) +
+  scale_y_continuous(breaks = seq(0, 0.6, by = 0.1)) +
+  coord_cartesian(ylim = c(0, 0.6)) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    axis.title = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 14),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16, face = "bold"),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
+  )
+
+```
+
+```{r}
+#| label: Compare turnover model outputs with standard ggplot2 outputs
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| include: false
+#| output: false
+#| echo: false
+
+TD |>
+  ggplot(aes(y = Turnover, x = year, colour = ftrap, fill = ftrap)) +
+  geom_smooth(method = "lm", se = TRUE, aes(colour = ftrap), method.args = list(family = "beta_family")) +
+  geom_jitter(shape = 19, size = 3.5, height = 0.5,
+              width = 0.5, alpha = 0.5) +
+  labs(y = "EPT Turnover",
+       x = "Year",
+       colour = "Trap",
+       fill = "Trap") +
+  scale_x_continuous(limits = c(1969, 2005)) +
+  ylim(range(TD$Turnover)) +
+  My_theme +
+  scale_colour_manual(values = trap_colours, name = "Trap") +
+  scale_fill_manual(values = trap_colours, name = "Trap") +
+  guides(
+    colour = guide_legend(title = "Trap", override.aes = list(size = 4, alpha = 1)),
+    fill = "none"
+  )
+
+TD |>
+  ggplot(aes(y = Turnover, x = year)) +
+  geom_smooth(method = "lm",  se = TRUE) +
+  geom_jitter(shape = 19, size = 3.5, height = 0.5,
+              width = 0.5, alpha = 0.5) +
+  labs(y = "EPT Richness",
+       x = "Year",
+       colour = "Trap",
+       fill = "Trap") +
+  scale_x_continuous(limits = c(1969, 2005)) +
+  ylim(range(TD$Turnover)) +
+  My_theme +
+  guides(
+    colour = guide_legend(title = "Trap", override.aes = list(size = 4, alpha = 1)),
+    fill = "none"
+  )
 ```
