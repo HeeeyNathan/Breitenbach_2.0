@@ -138,6 +138,7 @@ diptera_wide <- diptera_agg |>
               values_from = abundance,
               values_fill = 0,
               values_fn   = sum) |>
+  mutate(Overall = rowSums(across(where(is.numeric)))) |>
   arrange(sp_name)                                                         # Sort data
 ```
 
@@ -152,15 +153,17 @@ diptera_wide <- diptera_agg |>
 #| message: false
 #| output: false
 
-chaoA      <- ChaoSpecies(diptera_wide$A ,"abundance", k = 2, conf = 0.95)        # trap A
-chaoB      <- ChaoSpecies(diptera_wide$B ,"abundance", k = 2, conf = 0.95)        # trap B
-chaoC      <- ChaoSpecies(diptera_wide$C ,"abundance", k = 2, conf = 0.95)        # trap C
-chaoE      <- ChaoSpecies(diptera_wide$E ,"abundance", k = 2, conf = 0.95)        # trap E
-chaoF      <- ChaoSpecies(diptera_wide$F ,"abundance", k = 2, conf = 0.95)        # trap F
-chaoG      <- ChaoSpecies(diptera_wide$G ,"abundance", k = 2, conf = 0.95)        # trap G
-chaoI      <- ChaoSpecies(diptera_wide$I ,"abundance", k = 2, conf = 0.95)        # trap I
-chaoIII    <- ChaoSpecies(diptera_wide$III ,"abundance", k = 2, conf = 0.95)      # trap III
+
+chaoA       <- ChaoSpecies(diptera_wide$A ,"abundance", k = 2, conf = 0.95)        # trap A
+chaoB       <- ChaoSpecies(diptera_wide$B ,"abundance", k = 2, conf = 0.95)        # trap B
+chaoC       <- ChaoSpecies(diptera_wide$C ,"abundance", k = 2, conf = 0.95)        # trap C
+chaoE       <- ChaoSpecies(diptera_wide$E ,"abundance", k = 2, conf = 0.95)        # trap E
+chaoF       <- ChaoSpecies(diptera_wide$F ,"abundance", k = 2, conf = 0.95)        # trap F
+chaoG       <- ChaoSpecies(diptera_wide$G ,"abundance", k = 2, conf = 0.95)        # trap G
+chaoI       <- ChaoSpecies(diptera_wide$I ,"abundance", k = 2, conf = 0.95)        # trap I
+chaoIII     <- ChaoSpecies(diptera_wide$III ,"abundance", k = 2, conf = 0.95)      # trap III
 # chaoSource <- ChaoSpecies(diptera_wide$Source ,"abundance", k = 2, conf = 0.95)   # trap Source
+chaoOverall <- ChaoSpecies(diptera_wide$Overall ,"abundance", k = 2, conf = 0.95)      # Overall
 ```
 
 ## Extracting diversity profiles
@@ -171,15 +174,16 @@ This code chunk takes a long time to run, so I include it here as non-executable
 attach(diptera_wide) # makes each column a separate, accessible vector
 
 # Claculating diversity profiles
-Trap_A_diversity   <- Diversity(`A`, "abundance", q = c(0, 1, 2))
-Trap_B_diversity   <- Diversity(`B`, "abundance", q = c(0, 1, 2))
-Trap_C_diversity   <- Diversity(`C`, "abundance", q = c(0, 1, 2))
-Trap_E_diversity   <- Diversity(`E`, "abundance", q = c(0, 1, 2))
-Trap_F_diversity   <- Diversity(`F`, "abundance", q = c(0, 1, 2))
-Trap_G_diversity   <- Diversity(`G`, "abundance", q = c(0, 1, 2))
-Trap_I_diversity   <- Diversity(`I`, "abundance", q = c(0, 1, 2))
-Trap_III_diversity <- Diversity(`III`, "abundance", q = c(0, 1, 2))
+Trap_A_diversity        <- Diversity(`A`, "abundance", q = c(0, 1, 2))
+Trap_B_diversity        <- Diversity(`B`, "abundance", q = c(0, 1, 2))
+Trap_C_diversity        <- Diversity(`C`, "abundance", q = c(0, 1, 2))
+Trap_E_diversity        <- Diversity(`E`, "abundance", q = c(0, 1, 2))
+Trap_F_diversity        <- Diversity(`F`, "abundance", q = c(0, 1, 2))
+Trap_G_diversity        <- Diversity(`G`, "abundance", q = c(0, 1, 2))
+Trap_I_diversity        <- Diversity(`I`, "abundance", q = c(0, 1, 2))
+Trap_III_diversity      <- Diversity(`III`, "abundance", q = c(0, 1, 2))
 Trap_Source_diversity   <- Diversity(`Source`, "abundance", q = c(0, 1, 2))
+Trap_Overall_diversity  <- Diversity(`Overall`, "abundance", q = c(0, 1, 2))
 
 # List of trap names
 trap_names <- diptera_wide |>
@@ -216,7 +220,7 @@ process_trap <- function(trap_name) {
   )
 
   # Combine and arrange
-  rbind(chaojost_df, empirical_df) %>%
+  rbind(chaojost_df, empirical_df) |>
     arrange(Source)
 }
 
@@ -248,33 +252,99 @@ Diversity_profiles <- readRDS("Outputs/ChoasDiversityProfilesDiptera.rds")
 #| fig-format: svg
 
 # Define custom colours
-custom_colours <- c("ChaoJost" = "darkorange", "Empirical" = "darkturquoise")
+custom_colours <- c("Chao-Jost-2015" = "#d95f02", "Empirical" = "#1b9e77")
 
-p1 <- Diversity_profiles |> 
-  filter(!(Trap %in% c("Trap F", "Trap Source"))) |>
+# Calculate maximum y value (including confidence intervals)
+y_max <- max(c(
+  max(Diversity_profiles$Value, na.rm = TRUE),
+  max(Diversity_profiles$Upper_95, na.rm = TRUE)
+))
+
+# Round up to nearest 5 for clean limits
+y_max_rounded <- ceiling(y_max / 5) * 5
+
+# Create the plot
+Diversity_profiles |> 
+  filter(!(Trap %in% c("Trap F", "Trap Source"))) |> 
+  mutate(
+    Source = case_when(
+      Source == "ChaoJost" ~ "Chao-Jost-2015",
+      TRUE ~ Source
+    ),
+    Trap = case_when(
+      Trap == "Trap Overall" ~ "Overall",
+      TRUE ~ Trap
+    )
+  ) |> 
+  # Plot the diversity profiles
   ggplot(aes(x = q, y = Value, colour = Source, group = interaction(Source, Trap))) +
-  geom_point(size = 3) +
-  geom_line(linewidth = 1) +
-  geom_ribbon(data = . %>% filter(Source == "ChaoJost"),
+  geom_hline(yintercept = seq(-50, y_max_rounded, by = 10), 
+             color = "gray95", linewidth = 0.3) +
+  geom_vline(xintercept = c(0, 1, 2), color = "gray95", linewidth = 0.3) +
+  geom_ribbon(data = . %>% filter(Source == "Chao-Jost-2015"),
               aes(ymin = Lower_95, ymax = Upper_95, fill = Source),
-              linetype = 2, alpha = 0.2) +  # Style for ChaoJost
+              linetype = 0, alpha = 0.4, show.legend = FALSE) +
   geom_ribbon(data = . %>% filter(Source == "Empirical"),
               aes(ymin = Lower_95, ymax = Upper_95, fill = Source),
-              linetype = 2, alpha = 0.2) +  # Different style for Empirical
-  ylab("Hill numbers") +
-  xlab("Order q") +
+              linetype = 0, alpha = 0.4, show.legend = FALSE) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2, shape = 21, fill = "white", stroke = 0.8) +
+  # Add text for points
+  geom_text(data = . %>% filter(Source == "Chao-Jost-2015"),
+            aes(label = round(Value, 1), color = Source),
+            vjust = -0.8, size = 2.5, fontface = "bold", show.legend = FALSE) +
+  geom_text(data = . %>% filter(Source == "Empirical"),
+            aes(label = round(Value, 1), color = Source),
+            vjust = 1.8, size = 2.5, fontface = "bold", show.legend = FALSE) +
+  # Set labels
+  labs(
+    y = "Hill Numbers",
+    x = "Order q",
+    colour = "") +
+  # Set consistent scales across facets
   facet_wrap(vars(Trap)) +
-  theme_bw() +
+  scale_y_continuous(limits = c(-50, y_max_rounded), 
+                     breaks = seq(0, y_max_rounded, by = 50)) +
+  scale_x_continuous(breaks = seq(0, 2, by = 1), 
+                     labels = c("0", "1", "2")) +
+  # Apply color schemes
   scale_colour_manual(values = custom_colours) +
   scale_fill_manual(values = custom_colours) +
-  labs(colour = "Diversity measure", fill = "Diversity measure") +
-  scale_x_continuous(breaks = c(0, 1, 2)) +
+  # Apply theme
+  theme_minimal() +
   theme(
-    axis.title = element_text(family = "Arial", size = 12),
-    axis.text = element_text(family = "Arial", size = 12),
-    strip.text = element_text(family = "Arial", size = 14, face = "bold")
+    text = element_text(family = "Arial"),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0),
+    plot.subtitle = element_text(size = 11, color = "gray30"),
+    strip.background = element_rect(fill = "gray95", color = NA),
+    strip.text = element_text(size = 12, face = "bold", margin = margin(5, 0, 5, 0)),
+    axis.title = element_text(size = 11, face = "bold"),
+    axis.text = element_text(size = 10),
+    axis.text.x = element_text(margin = margin(t = 5)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(color = "gray80", fill = NA, linewidth = 0.5),
+    legend.position = "bottom",
+    legend.margin = margin(t = 10),
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 9),
+    legend.key.size = unit(1.2, "lines"),
+    plot.margin = margin(15, 15, 10, 10)
   )
-p1
+
+ggsave("Plots/Diptera/Diversity_profiles_diptera.png", width = 10, height = 7, dpi = 300, bg = "white")
+```
+
+## Summary statistics
+
+```{r}
+diptera_long |> 
+  filter(trap %in% c("A", "B", "C", "E", "G", "I", "III")) |> 
+  group_by(trap) |>
+  summarize(unique_species = n_distinct(sp_name), 
+            total_abundance = sum(abundance))
+  
 ```
 
 ## Standard community indices + turnover
@@ -286,9 +356,9 @@ p1
 #| code-fold: true
 
 diptera_long$ro.ab <- round(diptera_long$abundance, digits = 0) # Round abundance to whole numbers for rarefaction
-TD <- NULL                                              # Initialize empty data frame to store results
+TD <- NULL                                                      # Initialize empty data frame to store results
 
-for (i in unique(diptera_long$trap)) {                      # Loop through each unique trap in the dataset
+for (i in unique(diptera_long$trap)) {                          # Loop through each unique trap in the dataset
   sub <- diptera_long[diptera_long$trap == i, ]                 # subset for current trap & reshape data
   sub_m <- sub |>
     dplyr::select(trap_code, sp_name, abundance) |>
@@ -607,12 +677,22 @@ ggplot(TD |>
 
 This code chunk takes a long time to run, so I include it here as non-executable code. Below this chunk is an rds file with the outputs.
 
-``` r
+```{r}
 diptera_wide_red <- diptera_wide |>
-  select(-O, -F) |>
+  select(-F, -Source, -Overall) |>
   column_to_rownames(var = "sp_name") |>
   data.frame() |>
-  print()                                                          # remove traps with lower quality data: Trap D, F, & Quelle
+  print()                                                                  # remove traps with lower quality data: Trap D, F, & Quelle
+diptera_cum.rare = iNEXT(diptera_wide_red, q = 0, datatype = "abundance")  # calculate accumulation curves
+write_rds(diptera_cum.rare, "Outputs/rarefaction_diptera.rds")             # save output for quicker loading next time
+```
+
+``` r
+diptera_wide_red <- diptera_wide |>
+  select(-F, -Source) |>
+  column_to_rownames(var = "sp_name") |>
+  data.frame() |>
+  print()                                                                  # remove traps with lower quality data: Trap D, F, & Quelle
 diptera_cum.rare = iNEXT(diptera_wide_red, q = 0, datatype = "abundance")  # calculate accumulation curves
 write_rds(diptera_cum.rare, "Outputs/rarefaction_diptera.rds")             # save output for quicker loading next time
 ```
@@ -652,10 +732,85 @@ diptera_cum.rare$AsyEst
 
 options(scipen = 999)                                               # Increase penalty to avoid scientific notation
 p <- ggiNEXT(diptera_cum.rare, type = 1, color.var = "Assemblage")
-p <- p + ggtitle("Diptera")
 p <- p + My_theme
 p <- p + theme(legend.position = "bottom")
 p
+```
+
+```{r}
+#| label: Plotting all accumulation curves in the same plot
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 12
+#| fig-width: 12
+#| fig-format: svg
+
+# Create the base plot with ggiNEXT
+p <- ggiNEXT(diptera_cum.rare, type = 1, color.var = "Assemblage")
+
+# Apply aesthetic enhancements to match your first plot
+p <- p + 
+  # Update theme elements
+  theme_minimal() +
+  theme(
+    text = element_text(family = "Arial"),
+    axis.title = element_text(size = 11, face = "bold"),
+    axis.text = element_text(size = 10),
+    axis.text.x = element_text(margin = margin(t = 5), angle = 45, hjust = 1), # Added 45 degree angle
+    axis.title.y = element_text(margin = margin(r = 10)),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(color = "gray80", fill = NA, linewidth = 0.5),
+    legend.position = "bottom",
+    legend.margin = margin(t = 10),
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 9),
+    legend.key.size = unit(1.2, "lines"),
+    plot.margin = margin(15, 15, 10, 10)
+  ) +
+  # Set y-axis breaks every 50 units
+  scale_y_continuous(
+    labels = scales::comma,
+    breaks = function(x) seq(0, max(x), by = 50)
+  ) +
+  # Set x-axis breaks every 10,000 units
+  # scale_x_continuous(
+  #   labels = scales::comma,
+  #   breaks = function(x) seq(0, max(x), by = 50000)
+  # ) +
+  scale_x_continuous(
+    labels = scales::comma,
+    breaks = function(x) seq(0, max(750000), by = 50000)
+  ) +
+  # Add custom axis labels
+  labs(y = "Species richness (q = 0)")
+
+# Update point and line aesthetics without changing colors
+p$layers <- lapply(p$layers, function(layer) {
+  # Find geom_line and modify it
+  if(inherits(layer$geom, "GeomLine")) {
+    layer$aes_params$linewidth <- 0.8
+  }
+  # Find geom_point and modify it
+  if(inherits(layer$geom, "GeomPoint")) {
+    layer$aes_params$size <- 2
+    layer$aes_params$shape <- 21
+    layer$aes_params$fill <- "white"
+    layer$aes_params$stroke <- 0.8
+  }
+  # Modify ribbon/confidence interval if present
+  if(inherits(layer$geom, "GeomRibbon")) {
+    layer$aes_params$alpha <- 0.4
+    layer$aes_params$linetype <- 0
+  }
+  return(layer)
+})
+
+p
+
+# Save the plot
+# ggsave("Plots/Diptera/Rarefaction_diptera.png", p, width = 7, height = 7, dpi = 300, bg = "white")
 ```
 
 ### Accumulation curves in separate plots
@@ -1019,7 +1174,7 @@ mod_overall3 <- glmmTMB(Abund ~ poly(year.std, 3) + (1 | ftrap) + ar1(0 + factor
                         family = nbinom2, 
                         data = TD)
 
-mod_overall4 <- glmmTMB(Abund ~ poly(year.std, 5) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
+mod_overall4 <- glmmTMB(Abund ~ poly(year.std, 3) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
                         family = nbinom2, 
                         data = TD)
 
@@ -1056,11 +1211,11 @@ names(trap_models) <- levels(TD$ftrap)
 #| fig-format: svg
 
 # Simulated residual diagnostics
-simulation_output <- simulateResiduals(mod_overall4)
+simulation_output <- simulateResiduals(mod_overall2)
 plot(simulation_output)
 
 # Check for temporal autocorrelation in residuals
-acf(residuals(mod_overall4), main = "Autocorrelation of Residuals")
+acf(residuals(mod_overall2), main = "Autocorrelation of Residuals")
 
 # Plot the scaled quantile residuals versus each covariate in the model.
 plotResiduals(simulation_output, form = TD$year)   # Some trouble.
@@ -1099,42 +1254,40 @@ par(mfrow = c(1, 1))
 #| code-fold: true
 #| warning: false
 #| message: false
-#| fig-height: 8
-#| fig-width: 12
-#| fig-format: svg
+
 
 # Table 1: Overall Model
 tab_model(
-  mod_overall4,
-  # transform = backtransform,
+  mod_overall2,
+  show.ci = FALSE,
+  transform = NULL,
   show.se = TRUE,  
-  show.aic = TRUE,
-  show.loglik = TRUE, 
-  show.re.var = FALSE,  # Don't show random effects
-  p.style = "numeric",  
+  show.re.var = FALSE,
+  p.style = "stars",  
   string.pred = "Predictor",
   string.est = "Estimate",
-  title = "Conditional Model Results for Overall Diptera Abundance",
   CSS = list(
     css.table = "width: 100%;",
     css.tdata = "padding: 3px;"
-  )
+  ),
+  file = "Plots/Diptera/Diptera_abundance_overall_model.html"
 )
 
 # Table 2: Trap-specific Models
 tab_model(
   trap_models,
-  # tranform = backtransform,
-  show.aic = TRUE,
-  show.r2 = TRUE,
+  show.ci = FALSE,
+  transform = NULL,
+  show.se = TRUE,  
+  p.style = "stars",  
   string.pred = "Predictor",
   string.est = "Estimate",
   dv.labels = names(trap_models),
-  title = "Trap-specific Diptera Abundance Model Results",
   CSS = list(
     css.table = "width: 100%;",
     css.tdata = "padding: 3px;"
-  )
+  ),
+  file = "Plots/Diptera/Diptera_abundance_trap_models.html"
 )
 ```
 
@@ -1156,7 +1309,7 @@ trap_ranges <- TD |>
 # Generate predictions for each trap model, using observed time periods only
 trap_predictions <- lapply(names(trap_models), function(t) {
   # Get the observed time range for this trap
-  time_range <- trap_ranges %>% filter(ftrap == t)
+  time_range <- trap_ranges |> filter(ftrap == t)
   
   new_data <- expand.grid(
     year.std = seq(time_range$min_year, time_range$max_year, length.out = 300),
@@ -1165,7 +1318,7 @@ trap_predictions <- lapply(names(trap_models), function(t) {
   
   preds <- predict(trap_models[[t]], newdata = new_data, type = "response", se.fit = TRUE)
   
-  new_data <- new_data %>%
+  new_data <- new_data |>
     mutate(
       predicted = preds$fit,
       conf.low = preds$fit - 1.96 * preds$se.fit,
@@ -1185,8 +1338,8 @@ MyData_overall <- data.frame(
 )
 
 # Get predictions for the overall model
-pred_overall <- predict(mod_overall4, newdata = MyData_overall, type = "response", se.fit = TRUE, allow.new.levels = TRUE)
-MyData_overall <- MyData_overall %>%
+pred_overall <- predict(mod_overall2, newdata = MyData_overall, type = "response", se.fit = TRUE, allow.new.levels = TRUE)
+MyData_overall <- MyData_overall |>
   mutate(
     predicted = pred_overall$fit,
     conf.low = pred_overall$fit - 1.96 * pred_overall$se.fit,
@@ -1269,10 +1422,10 @@ ggplot() +
 TD_mean_year <- mean(TD$year)
 TD_sd_year <- sd(TD$year)
 
-MyData_traps <- MyData_traps %>%
+MyData_traps <- MyData_traps |>
   mutate(year = (year.std * TD_sd_year) + TD_mean_year)
 
-MyData_overall <- MyData_overall %>%
+MyData_overall <- MyData_overall |>
   mutate(year = (year.std * TD_sd_year) + TD_mean_year)
 
 # Define color and shape palette for traps
@@ -1283,7 +1436,7 @@ trap_shapes <- setNames(rep(16:19, length.out = length(trap_colours)), levels(TD
 # Plot: Individual Trap Trends & Overall Trend with Confidence Intervals
 ggplot() +
   # Confidence ribbons for individual trap models
-  # geom_ribbon(data = MyData_traps, aes(x = year, ymin = conf.low, ymax = conf.high, fill = ftrap), alpha = 0.2) +
+  geom_ribbon(data = MyData_traps, aes(x = year, ymin = conf.low, ymax = conf.high, fill = ftrap), alpha = 0.2) +
   
   # Individual trap predictions
   geom_line(data = MyData_traps, aes(x = year, y = predicted, colour = ftrap), size = 1, alpha = 1) +
@@ -1292,15 +1445,15 @@ ggplot() +
   geom_point(data = TD, aes(x = year, y = Abund, colour = ftrap, shape = ftrap, fill = ftrap), size = 5, alpha = 0.4) +
   
   # Confidence interval for overall trend
-  geom_ribbon(data = MyData_overall, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
+  # geom_ribbon(data = MyData_overall, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
   
   # Overall model trend line
   geom_line(data = MyData_overall, aes(x = year, y = predicted, linetype = ftrap), colour = "black", size = 2) +
 
   labs(
-    title = "Diptera Abundance Trends: Trap-Specific & Overall",
+    # title = "Diptera Abundance Trends: Trap-Specific & Overall",
     x = "Year",  # Now in original units
-    y = "Predicted Abundance",
+    y = "Diptera abundance",
     colour = "Trap",
     fill = "Trap",
     shape = "Trap",
@@ -1332,10 +1485,16 @@ ggplot() +
     panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
     axis.title = element_text(size = 16, face = "bold"),
     axis.text = element_text(size = 14),
-    legend.text = element_text(size = 14),
-    legend.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 9),
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.position = "bottom",
+    legend.margin = margin(t = 10),
+    legend.key.size = unit(1.2, "lines"),
     plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
   )
+
+# Save the plot
+ggsave("Plots/Diptera/Diptera_abundance_model.png", width = 8, height = 7, dpi = 300, bg = "white")
 ```
 
 ```{r}
@@ -1371,7 +1530,8 @@ TD |>
 
 TD |>
   ggplot(aes(y = Abund, x = year)) +
-  geom_smooth(method = "lm",  se = TRUE, method.args = list(family = "nbinomial")) +
+  # geom_smooth(method = "gam", se = TRUE) +
+  geom_smooth(method = lm, formula = y ~ splines::bs(x, 3), se = TRUE, method.args = list(family = "nbinomial")) +
   geom_jitter(shape = 19, size = 3.5, height = 0.5,
               width = 0.5, alpha = 0.5) +
   labs(y = "Diptera Abundance",
@@ -1423,35 +1583,30 @@ AIC(mod_poisson, mod_gamma, mod_gaussian)
 
 # Base model (no random effects)
 spp_mod_overall <- glmmTMB(SppRich ~ bs(year.std), 
-                        family = gaussian, 
+                        family = gaussian(link = "identity"), 
                         data = TD)
 
 # Model with trap as a random effect
 spp_mod_overall1 <- glmmTMB(SppRich ~ bs(year.std) + (1 | ftrap), 
-                        family = gaussian, 
+                        family = gaussian(link = "identity"), 
                         data = TD)
 
 # Model with trap as a random effect and AR(1) autocorrelation
 spp_mod_overall2 <- glmmTMB(SppRich ~ bs(year.std) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
-                        family = gaussian, 
+                        family = gaussian(link = "identity"), 
                         data = TD)
 
 # Model with trap as a random effect and AR(1) autocorrelation
 spp_mod_overall3 <- glmmTMB(SppRich ~ poly(year.std, 3) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
-                        family = gaussian, 
-                        data = TD)
-
-# Model with trap as a random effect and AR(1) autocorrelation
-spp_mod_overall4 <- glmmTMB(SppRich ~ poly(year.std, 5) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
-                        family = gaussian, 
+                        family = gaussian(link = "identity"), 
                         data = TD)
 
 # Compare models
-AIC(spp_mod_overall, spp_mod_overall1, spp_mod_overall2, spp_mod_overall3, spp_mod_overall4)
+AIC(spp_mod_overall, spp_mod_overall1, spp_mod_overall2, spp_mod_overall3)
 
 spp_trap_models <- lapply(levels(TD$ftrap), function(t) {
   glmmTMB(SppRich ~ year.std, 
-          family = gaussian, 
+          family = gaussian(link = "identity"), 
           data = TD[TD$ftrap == t, ])
 })
 
@@ -1474,11 +1629,11 @@ names(spp_trap_models) <- levels(TD$ftrap)
 #| fig-format: svg
 
 # Simulated residual diagnostics
-simulation_output <- simulateResiduals(spp_mod_overall3)
+simulation_output <- simulateResiduals(spp_mod_overall2)
 plot(simulation_output)
 
 # Check for temporal autocorrelation in residuals
-acf(residuals(spp_mod_overall3), main = "Autocorrelation of Residuals")
+acf(residuals(spp_mod_overall2), main = "Autocorrelation of Residuals")
 
 # Plot the scaled quantile residuals versus each covariate in the model.
 plotResiduals(simulation_output, form = TD$year)   # Some trouble.
@@ -1533,36 +1688,36 @@ par(mfrow = c(1, 1))
 
 # Table 1: Overall Model
 tab_model(
-  spp_mod_overall3,
-  # transform = backtransform,
+  spp_mod_overall2,
+  show.ci = FALSE,
+  transform = NULL,
   show.se = TRUE,  
-  show.aic = TRUE,
-  show.loglik = TRUE, 
-  show.re.var = FALSE,  # Don't show random effects
-  p.style = "numeric",  
+  show.re.var = FALSE,
+  p.style = "stars",  
   string.pred = "Predictor",
   string.est = "Estimate",
-  title = "Conditional Model Results for Overall Diptera Species Richness",
   CSS = list(
     css.table = "width: 100%;",
     css.tdata = "padding: 3px;"
-  )
+  ),
+  file = "Plots/Diptera/Diptera_sppRich_overall_model.html"
 )
 
 # Table 2: Trap-specific Models
 tab_model(
   spp_trap_models,
-  # tranform = backtransform,
-  show.aic = TRUE,
-  show.r2 = TRUE,
+  show.ci = FALSE,
+  transform = NULL,
+  show.se = TRUE,  
+  p.style = "stars",  
   string.pred = "Predictor",
   string.est = "Estimate",
-  dv.labels = names(spp_trap_models),
-  title = "Trap-specific Diptera Species Richness Model Results",
+  dv.labels = names(trap_models),
   CSS = list(
     css.table = "width: 100%;",
     css.tdata = "padding: 3px;"
-  )
+  ),
+  file = "Plots/Diptera/Diptera_sppRich_trap_models.html"
 )
 ```
 
@@ -1583,7 +1738,7 @@ trap_ranges <- TD |>
 
 # Generate predictions for each trap model
 trap_predictions <- lapply(names(spp_trap_models), function(t) {
-  time_range <- trap_ranges %>% filter(ftrap == t)
+  time_range <- trap_ranges |> filter(ftrap == t)
   
   new_data <- expand.grid(
     year.std = seq(time_range$min_year, time_range$max_year, length.out = 300),
@@ -1592,7 +1747,7 @@ trap_predictions <- lapply(names(spp_trap_models), function(t) {
   
   preds <- predict(spp_trap_models[[t]], newdata = new_data, type = "response", se.fit = TRUE)
   
-  new_data <- new_data %>%
+  new_data <- new_data |>
     mutate(
       predicted = preds$fit,
       conf.low = predicted - 1.96 * preds$se.fit,
@@ -1612,14 +1767,14 @@ MyData_overall <- data.frame(
 )
 
 # Get predictions
-pred_overall <- predict(spp_mod_overall3, 
+pred_overall <- predict(spp_mod_overall2, 
                         newdata = MyData_overall, 
                         type = "response", 
                         se.fit = TRUE, 
                         allow.new.levels = TRUE)
 
 # Store predictions
-MyData_overall <- MyData_overall %>%
+MyData_overall <- MyData_overall |>
   mutate(
     predicted = pred_overall$fit,
     conf.low = predicted - 1.96 * pred_overall$se.fit,
@@ -1704,10 +1859,10 @@ ggplot() +
 TD_mean_year <- mean(TD$year)
 TD_sd_year <- sd(TD$year)
 
-MyData_traps <- MyData_traps %>%
+MyData_traps <- MyData_traps |>
   mutate(year = (year.std * TD_sd_year) + TD_mean_year)
 
-MyData_overall <- MyData_overall %>%
+MyData_overall <- MyData_overall |>
   mutate(year = (year.std * TD_sd_year) + TD_mean_year)
 
 # Define color and shape palette for traps
@@ -1718,13 +1873,14 @@ trap_shapes <- setNames(rep(16:19, length.out = length(trap_colours)), levels(TD
 # Plot: Individual Trap Trends & Overall Trend with Confidence Intervals
 ggplot() +
   geom_line(data = MyData_traps, aes(x = year, y = predicted, colour = ftrap), size = 1, alpha = 1) +
+  geom_ribbon(data = MyData_traps, aes(x = year, ymin = conf.low, ymax = conf.high, fill = ftrap), alpha = 0.2) +
   geom_point(data = TD, aes(x = year, y = SppRich, colour = ftrap, shape = ftrap, fill = ftrap), size = 5, alpha = 0.4) +
-  geom_ribbon(data = MyData_overall, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
+  # geom_ribbon(data = MyData_overall, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
   geom_line(data = MyData_overall, aes(x = year, y = predicted, linetype = ftrap), colour = "black", size = 2) +
   labs(
-    title = "Diptera Richness Trends: Trap-Specific & Overall",
-    x = "Standardized Year",
-    y = "Predicted Species Richness",
+    # title = "Diptera Richness Trends: Trap-Specific & Overall",
+    x = "Year",
+    y = "Diptera species richness (q = 0)",
     colour = "Trap",
     fill = "Trap",
     shape = "Trap",
@@ -1750,10 +1906,16 @@ ggplot() +
     panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
     axis.title = element_text(size = 16, face = "bold"),
     axis.text = element_text(size = 14),
-    legend.text = element_text(size = 14),
-    legend.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 9),
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.position = "bottom",
+    legend.margin = margin(t = 10),
+    legend.key.size = unit(1.2, "lines"),
     plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
   )
+
+# Save the plot
+ggsave("Plots/Diptera/Diptera_sppRich_model.png", width = 8, height = 7, dpi = 300, bg = "white")
 ```
 
 ```{r}
@@ -1770,7 +1932,7 @@ ggplot() +
 
 TD |>
   ggplot(aes(y = SppRich, x = year, colour = ftrap, fill = ftrap)) +
-  geom_smooth(method = "lm", se = TRUE, aes(colour = ftrap), method.args = list(family = "nbinomial")) +
+  geom_smooth(method = "lm", se = TRUE, aes(colour = ftrap), method.args = list(family = "gaussian")) +
   geom_jitter(shape = 19, size = 3.5, height = 0.5,
               width = 0.5, alpha = 0.5) +
   labs(y = "Diptera Richness",
@@ -1789,7 +1951,8 @@ TD |>
 
 TD |>
   ggplot(aes(y = SppRich, x = year)) +
-  geom_smooth(method = "gam",  se = TRUE) +
+  # geom_smooth(method = "gam",  se = TRUE) +
+  geom_smooth(method = lm, formula = y ~ splines::bs(x, 3), se = TRUE, method.args = list(family = "gaussian")) +
   geom_jitter(shape = 19, size = 3.5, height = 0.5,
               width = 0.5, alpha = 0.5) +
   labs(y = "Diptera Richness",
@@ -1815,8 +1978,8 @@ TD |>
 #| include: false
 
 # Remove NAs
-TD_turn <- TD %>%
-  filter(complete.cases(.))
+TD_turn <- TD |>
+  filter(complete.cases(TD))
 
 # Poisson Model (may be too restrictive)
 mod_poisson <- glmmTMB(Turnover ~ bs(year.std), 
@@ -1828,16 +1991,16 @@ mod_gaussian_logit <- glmmTMB(Turnover ~ bs(year.std),
                      family = gaussian(link = "logit"),
                      data = TD_turn)
 
-# Gaussian Model (if species richness is approximately normal)
-mod_gaussian <- glmmTMB(Turnover ~ bs(year.std), 
-                        family = gaussian, 
-                        data = TD_turn)
+# Gamma Model (if data is continuous and positive)
+mod_gaussian_logit <- glmmTMB(Turnover ~ bs(year.std), 
+                     family = gaussian(link = "logit"),
+                     data = TD_turn)
 
 # Compare models using AIC
 AIC(mod_poisson, mod_gaussian_logit, mod_gaussian)
 ```
 
-## Fit Beta model in GLMTMB
+## Fit Gaussian model in GLMTMB
 
 ```{r}
 #| label: Fitting models for turnover
@@ -1845,27 +2008,27 @@ AIC(mod_poisson, mod_gaussian_logit, mod_gaussian)
 
 # Base model (no random effects)
 turn_mod_overall <- glmmTMB(Turnover ~ bs(year.std), 
-                        family = gaussian,
+                        family = gaussian(link = "logit"),
                         data = TD_turn)
 
 # Model with trap as a random effect
 turn_mod_overall1 <- glmmTMB(Turnover ~ bs(year.std) + (1 | ftrap), 
-                        family = gaussian,
+                        family = gaussian(link = "logit"),
                         data = TD_turn)
 
 # Model with trap as a random effect and AR(1) autocorrelation
 turn_mod_overall2 <- glmmTMB(Turnover ~ bs(year.std) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
-                        family = gaussian,
+                        family = gaussian(link = "logit"),
                         data = TD_turn)
 
 # Model with trap as a random effect and AR(1) autocorrelation
 turn_mod_overall3 <- glmmTMB(Turnover ~ poly(year.std, 3) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
-                        family = gaussian,
+                        family = gaussian(link = "logit"),
                         data = TD_turn)
 
 # Model with trap as a random effect and AR(1) autocorrelation
 turn_mod_overall4 <- glmmTMB(Turnover ~ poly(year.std, 2) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap), 
-                        family = gaussian,
+                        family = gaussian(link = "logit"),
                         data = TD_turn)
 
 # Compare models
@@ -1873,7 +2036,7 @@ AIC(turn_mod_overall, turn_mod_overall1, turn_mod_overall2, turn_mod_overall3, t
 
 turn_trap_models <- lapply(levels(TD_turn$ftrap), function(t) {
   glmmTMB(Turnover ~ year.std, 
-          family = gaussian,
+          family = gaussian(link = "logit"),
           data = TD_turn[TD_turn$ftrap == t, ])
 })
 
@@ -1895,11 +2058,11 @@ names(turn_trap_models) <- levels(TD_turn$ftrap)
 #| fig-format: svg
 
 # Simulated residual diagnostics
-simulation_output <- simulateResiduals(turn_mod_overall3)
+simulation_output <- simulateResiduals(turn_mod_overall2)
 plot(simulation_output)
 
 # Check for temporal autocorrelation in residuals
-acf(residuals(turn_mod_overall3), main = "Autocorrelation of Residuals")
+acf(residuals(turn_mod_overall2), main = "Autocorrelation of Residuals")
 
 # Plot the scaled quantile residuals versus each covariate in the model.
 plotResiduals(simulation_output, form = TD_turn$year)   # Some trouble.
@@ -1953,37 +2116,36 @@ par(mfrow = c(1, 1))
 
 # Table 1: Overall Model
 tab_model(
-  turn_mod_overall3,
-  # transform = backtransform,
+  turn_mod_overall2,
+  show.ci = FALSE,
+  transform = NULL,
   show.se = TRUE,  
-  show.aic = TRUE,
-  show.loglik = TRUE, 
-  show.re.var = FALSE,  # Don't show random effects
-  p.style = "numeric",  
+  show.re.var = FALSE,
+  p.style = "stars",  
   string.pred = "Predictor",
   string.est = "Estimate",
-  title = "Conditional Model Results for Overall Turnover",
   CSS = list(
     css.table = "width: 100%;",
     css.tdata = "padding: 3px;"
-  )
+  ),
+  file = "Plots/Diptera/Diptera_turnover_overall_model.html"
 )
 
 # Table 2: Trap-specific Models
 tab_model(
   turn_trap_models,
-  # tranform = backtransform,
-  show.ci = TRUE,
-  show.aic = TRUE,
-  show.r2 = TRUE,
+  show.ci = FALSE,
+  transform = NULL,
+  show.se = TRUE,  
+  p.style = "stars",  
   string.pred = "Predictor",
   string.est = "Estimate",
-  dv.labels = names(turn_trap_models),
-  title = "Trap-specific Turnover Model Results",
+  dv.labels = names(trap_models),
   CSS = list(
     css.table = "width: 100%;",
     css.tdata = "padding: 3px;"
-  )
+  ),
+  file = "Plots/Diptera/Diptera_turnover_trap_models.html"
 )
 ```
 
@@ -2004,7 +2166,7 @@ trap_ranges <- TD_turn |>
 
 # Generate predictions for each trap model
 trap_predictions <- lapply(levels(TD_turn$ftrap), function(t) {
-  time_range <- trap_ranges %>% filter(ftrap == t)
+  time_range <- trap_ranges |> filter(ftrap == t)
 
   new_data <- expand.grid(
     year.std = seq(time_range$min_year, time_range$max_year, length.out = 300),
@@ -2013,7 +2175,7 @@ trap_predictions <- lapply(levels(TD_turn$ftrap), function(t) {
 
   preds <- predict(turn_trap_models[[t]], newdata = new_data, type = "response", se.fit = TRUE)
 
-  new_data <- new_data %>%
+  new_data <- new_data |>
     mutate(
       predicted = preds$fit,
       conf.low = predicted - 1.96 * preds$se.fit,
@@ -2033,14 +2195,14 @@ MyData_overall <- data.frame(
 )
 
 # Get predictions, allowing new factor levels
-pred_overall <- predict(turn_mod_overall3, 
+pred_overall <- predict(turn_mod_overall2, 
                         newdata = MyData_overall, 
                         type = "response", 
                         se.fit = TRUE, 
                         allow.new.levels = TRUE)
 
 # Store predictions with confidence intervals
-MyData_overall <- MyData_overall %>%
+MyData_overall <- MyData_overall |>
   mutate(
     predicted = pred_overall$fit,
     conf.low = predicted - 1.96 * pred_overall$se.fit,
@@ -2082,9 +2244,9 @@ ggplot() +
   geom_ribbon(data = MyData_overall, aes(x = year.std, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
   geom_line(data = MyData_overall, aes(x = year.std, y = predicted, linetype = ftrap), colour = "black", size = 2) +
   labs(
-    title = "Diptera Turnover Trends: Trap-Specific & Overall",
+    # title = "Diptera Turnover Trends: Trap-Specific & Overall",
     x = "Year",
-    y = "Predicted Turnover",
+    y = "Diptera Turnover",
     colour = "Trap",
     fill = "Trap",
     shape = "Trap",
@@ -2143,13 +2305,14 @@ TD$year <- TD$year.std * sd(TD$year) + mean(TD$year)
 # Plot: Individual Trap Trends & Overall Trend with Confidence Intervals
 ggplot() +
   geom_line(data = MyData_traps, aes(x = year, y = predicted, colour = ftrap), size = 1, alpha = 1) +
+  geom_ribbon(data = MyData_traps, aes(x = year, ymin = conf.low, ymax = conf.high, fill = ftrap), alpha = 0.2) +
   geom_point(data = TD, aes(x = year, y = Turnover, colour = ftrap, shape = ftrap, fill = ftrap), size = 5, alpha = 0.4) +
-  geom_ribbon(data = MyData_overall, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
+  # geom_ribbon(data = MyData_overall, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "grey50", alpha = 0.3) +
   geom_line(data = MyData_overall, aes(x = year, y = predicted, linetype = ftrap), colour = "black", size = 2) +
   labs(
-    title = "Diptera Turnover Trends: Trap-Specific & Overall",
+    # title = "Diptera Turnover Trends: Trap-Specific & Overall",
     x = "Year",
-    y = "Predicted Turnover",
+    y = "Diptera Turnover",
     colour = "Trap",
     fill = "Trap",
     shape = "Trap",
@@ -2175,11 +2338,16 @@ ggplot() +
     panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
     axis.title = element_text(size = 16, face = "bold"),
     axis.text = element_text(size = 14),
-    legend.text = element_text(size = 14),
-    legend.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 9),
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.position = "bottom",
+    legend.margin = margin(t = 10),
+    legend.key.size = unit(1.2, "lines"),
     plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
   )
 
+# Save the plot
+ggsave("Plots/Diptera/Diptera_turnover_model.png", width = 8, height = 7, dpi = 300, bg = "white")
 ```
 
 ```{r}
@@ -2196,7 +2364,7 @@ ggplot() +
 
 TD |>
   ggplot(aes(y = Turnover, x = year, colour = ftrap, fill = ftrap)) +
-  geom_smooth(method = "lm", se = TRUE, aes(colour = ftrap), method.args = list(family = "beta_family")) +
+  geom_smooth(method = "lm", se = TRUE, aes(colour = ftrap), method.args = list(family = "gaussian")) +
   geom_jitter(shape = 19, size = 3.5, height = 0.5,
               width = 0.5, alpha = 0.5) +
   labs(y = "Diptera Turnover",
@@ -2215,7 +2383,8 @@ TD |>
 
 TD |>
   ggplot(aes(y = Turnover, x = year)) +
-  geom_smooth(method = "gam",  se = TRUE) +
+  # geom_smooth(method = "gam",  se = TRUE) +
+  geom_smooth(method = lm, formula = y ~ splines::bs(x, 3), se = TRUE, method.args = list(family = "gaussian")) +
   geom_jitter(shape = 19, size = 3.5, height = 0.5,
               width = 0.5, alpha = 0.5) +
   labs(y = "Diptera turnover",
