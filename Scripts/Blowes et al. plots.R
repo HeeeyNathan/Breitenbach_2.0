@@ -1,0 +1,399 @@
+# ========== LOAD PACKAGES ==========
+library(tidyverse)
+library(patchwork)
+library(janitor)
+library(SpadeR)
+library(vegan)
+library(codyn)
+library(mobr)
+library(iNEXT)
+library(readxl)
+library(writexl)
+require(gridExtra)
+library(data.table)
+library(entropart)
+library(future.apply)
+library(tidyr)
+library(dplyr)
+library(gridExtra)
+library(grid)
+
+# ========== LOAD DATA ==========
+diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>
+  as_tibble() |>
+  clean_names() |>
+  rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>
+  filter(!str_detect(original_name, "Summe")) |>
+  filter(order == "Diptera") |>
+  select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>
+  mutate(trap_new = case_when(
+    trap %in% c('Haus 0') ~ 'O',
+    trap %in% c('Haus A', 'A/I') ~ 'A',
+    trap %in% c('Haus I') ~ 'I',
+    trap %in% c('Haus B', 'B / II', 'B-II-X', 'B/II', 'Haus B/II') ~ 'B',
+    trap %in% c('Haus C-IV', 'C / IV', 'C-IV', 'C/IV', 'Haus C', 'Haus C/IV') ~ 'C',
+    trap %in% c('Haus III') ~ 'III',
+    trap %in% c('Haus D') ~ 'D',
+    trap %in% c('Haus E - V', 'E / V', 'E-V', 'E/V', 'Haus E/V') ~ 'E',
+    trap %in% c('Haus F - VI', 'F / VI', 'F-VI', 'F-VII', 'F/VI', 'Haus F/VI') ~ 'F',
+    trap %in% c('Haus G', 'G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
+    trap %in% c('Quelle') ~ 'Source',
+    TRUE ~ trap)) |>
+  select(-c(taxa_id:trap)) |>
+  mutate(sp_name  = validated_name,
+         trap     = trap_new,
+         trap     = factor(trap)) |>
+  arrange(trap, family, sp_name) |>
+  select(-c(validated_name, trap_new, order)) |>
+  select(trap, sp_name, family, everything())
+
+ept <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>
+  as_tibble() |>
+  clean_names() |>
+  rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>
+  filter(!str_detect(original_name, "Summe")) |>
+  filter(order %in% c("Ephemeroptera", "Plecoptera", "Trichoptera")) |>
+  select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>
+  mutate(trap_new = case_when(
+    trap %in% c('Haus 0') ~ 'O',
+    trap %in% c('Haus A', 'A/I') ~ 'A',
+    trap %in% c('Haus I') ~ 'I',
+    trap %in% c('Haus B', 'B / II', 'B-II-X', 'B/II', 'Haus B/II') ~ 'B',
+    trap %in% c('Haus C-IV', 'C / IV', 'C-IV', 'C/IV', 'Haus C', 'Haus C/IV') ~ 'C',
+    trap %in% c('Haus III') ~ 'III',
+    trap %in% c('Haus D') ~ 'D',
+    trap %in% c('Haus E - V', 'E / V', 'E-V', 'E/V', 'Haus E/V') ~ 'E',
+    trap %in% c('Haus F - VI', 'F / VI', 'F-VI', 'F-VII', 'F/VI', 'Haus F/VI') ~ 'F',
+    trap %in% c('Haus G', 'G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
+    trap %in% c('Quelle') ~ 'Source',
+    TRUE ~ trap)) |>
+  filter(!str_detect(trap_new, "D")) |>
+  select(-c(taxa_id:trap)) |>
+  mutate(sp_name  = validated_name,
+         trap     = trap_new,
+         trap     = factor(trap)) |>
+  arrange(trap, family, sp_name) |>
+  select(-c(validated_name, trap_new, order)) |>
+  select(trap, sp_name, family, everything())
+
+# ========== REMOVE DUPLICATES ==========
+diptera_clean <- diptera |>
+  group_by(trap, sp_name, family) |>
+  summarise(across(where(is.numeric), ~sum(.x, na.rm = TRUE)), .groups = "drop")
+
+ept_clean <- ept |>
+  group_by(trap, sp_name, family) |>
+  summarise(across(where(is.numeric), ~sum(.x, na.rm = TRUE)), .groups = "drop")
+
+# ========== TRANSFORM DATA ==========
+diptera_long <- diptera_clean |>
+  pivot_longer(cols = starts_with("19") | starts_with("20"),
+               names_to = "year", values_to = "abundance") |>
+  mutate(trap_code = paste(trap, year, sep = "_"),
+         year = as.numeric(year)) |>
+  filter(abundance != 0) |>
+  arrange(trap, year)
+
+ept_long <- ept_clean |>
+  pivot_longer(cols = starts_with("19") | starts_with("20"),
+               names_to = "year", values_to = "abundance") |>
+  mutate(trap_code = paste(trap, year, sep = "_"),
+         year = as.numeric(year)) |>
+  filter(abundance != 0) |>
+  arrange(trap, year)
+
+# ========== FUNCTION TO CALCULATE DELTAS ==========
+calculate_deltas <- function(long_data, group_name) {
+  # Separate trap and year
+  long_data_clean <- long_data %>%
+    separate(trap_code, into = c("TrapID", "YearID"), sep = "_") %>%
+    mutate(YearID = as.integer(YearID))
+
+  # Aggregate counts
+  agg_data <- long_data_clean %>%
+    group_by(TrapID, YearID, sp_name) %>%
+    summarise(Count = sum(abundance), .groups = "drop")
+
+  # Filter to keep specified levels
+  keep_levels <- c("A", "C", "G", "III", "B", "E", "I")
+  agg_data <- agg_data %>%
+    filter(TrapID %in% keep_levels) %>%
+    mutate(TrapID = factor(TrapID, levels = keep_levels))
+
+  # Create species matrix
+  comm_matrix <- agg_data %>%
+    pivot_wider(names_from = sp_name, values_from = Count, values_fill = 0)
+
+  trap_year_meta <- comm_matrix %>% select(TrapID, YearID)
+  species_matrix <- comm_matrix %>% select(-TrapID, -YearID)
+
+  # Calculate metrics
+  metrics <- species_matrix %>%
+    mutate(N = rowSums(.),
+           S = specnumber(.),
+           PIE = diversity(., index = "simpson")) %>%
+    bind_cols(trap_year_meta, .)
+
+  # Function to calculate deltas between consecutive years
+  compute_all_deltas <- function(df_sub) {
+    df_sub <- df_sub %>% arrange(YearID)
+
+    if (nrow(df_sub) < 2) return(NULL)
+
+    result_list <- list()
+
+    for (i in 2:nrow(df_sub)) {
+      year1 <- df_sub[i - 1, ]
+      year2 <- df_sub[i, ]
+
+      delta_N <- year2$N - year1$N
+      delta_S <- year2$S - year1$S
+      delta_PIE <- year2$PIE - year1$PIE
+
+      # Extract species data for rarefaction
+      species_1 <- year1 %>% select(-TrapID, -YearID, -N, -S, -PIE)
+      species_2 <- year2 %>% select(-TrapID, -YearID, -N, -S, -PIE)
+
+      rarefied <- rarefy(rbind(species_1, species_2), sample = min(year1$N, year2$N))
+
+      result_list[[i - 1]] <- tibble(
+        TrapID = year1$TrapID,
+        Year1 = year1$YearID,
+        Year2 = year2$YearID,
+        Delta_N = delta_N,
+        Delta_S = delta_S,
+        S_rare_1 = rarefied[1],
+        S_rare_2 = rarefied[2],
+        Delta_PIE = delta_PIE,
+        Group = group_name  # Add group identifier
+      )
+    }
+
+    bind_rows(result_list)
+  }
+
+  # Apply delta calculation
+  delta_results <- metrics %>%
+    group_by(TrapID) %>%
+    group_split() %>%
+    lapply(compute_all_deltas) %>%
+    bind_rows()
+
+  # Add Delta_S_rare
+  delta_results <- delta_results %>%
+    mutate(Delta_S_rare = S_rare_2 - S_rare_1)
+
+  return(delta_results)
+}
+
+# ========== CALCULATE DELTAS FOR BOTH GROUPS ==========
+diptera_deltas <- calculate_deltas(diptera_long, "Diptera")
+ept_deltas <- calculate_deltas(ept_long, "EPT")
+
+# Print summaries to check differences
+cat("DIPTERA SUMMARY:\n")
+print(summary(diptera_deltas[c("Delta_N", "Delta_S", "Delta_S_rare")]))
+cat("\nEPT SUMMARY:\n")
+print(summary(ept_deltas[c("Delta_N", "Delta_S", "Delta_S_rare")]))
+
+# ========== CALCULATE CORRELATIONS ==========
+# Diptera correlations
+diptera_cor_N_S <- cor(diptera_deltas$Delta_N, diptera_deltas$Delta_S, use = "complete.obs")
+diptera_cor_Srare_S <- cor(diptera_deltas$Delta_S_rare, diptera_deltas$Delta_S, use = "complete.obs")
+diptera_cor_Nrare_S <- cor(diptera_deltas$Delta_N, diptera_deltas$Delta_S_rare, use = "complete.obs")
+
+# EPT correlations
+ept_cor_N_S <- cor(ept_deltas$Delta_N, ept_deltas$Delta_S, use = "complete.obs")
+ept_cor_Srare_S <- cor(ept_deltas$Delta_S_rare, ept_deltas$Delta_S, use = "complete.obs")
+ept_cor_Nrare_S <- cor(ept_deltas$Delta_N, ept_deltas$Delta_S_rare, use = "complete.obs")
+
+cat("CORRELATIONS:\n")
+cat("Diptera - Delta_N vs Delta_S:", round(diptera_cor_N_S, 2), "\n")
+cat("Diptera - Delta_S_rare vs Delta_S:", round(diptera_cor_Srare_S, 2), "\n")
+cat("Diptera - Delta_N vs Delta_S_rare:", round(diptera_cor_Nrare_S, 2), "\n")
+cat("EPT - Delta_N vs Delta_S:", round(ept_cor_N_S, 2), "\n")
+cat("EPT - Delta_S_rare vs Delta_S:", round(ept_cor_Srare_S, 2), "\n")
+cat("EPT - Delta_N vs Delta_S_rare:", round(ept_cor_Nrare_S, 2), "\n")
+
+# ========== DEFINE PLOTTING THEME ==========
+theme_nice <- function() {
+  theme_minimal() +
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.border = element_rect(colour = "black", fill = NA, linewidth = 1.2),
+      axis.title = element_text(size = 16, face = "bold"),
+      axis.text = element_text(size = 14),
+      axis.ticks = element_line(color = "black", linewidth = 0.5),
+      axis.ticks.length = unit(0.25, "cm"),
+      legend.text = element_text(size = 14),
+      legend.title = element_text(size = 16, face = "bold"),
+      plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+      strip.text = element_text(size = 14, face = "bold")
+    )
+}
+
+# ========== CREATE PLOTS WITH ACTUAL CORRELATIONS ==========
+# DIPTERA PLOTS - Overall
+p1_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
+  geom_point(alpha = 0.6, color = "#8B0000", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
+  stat_ellipse(type = "norm", level = 0.95, color = "#CD5C5C", linewidth = 1) +
+  theme_nice() +
+  labs(x = expression(bold(Delta*S)),
+       y = expression(bold(Delta*N)~bold("(in thousands)"))) +
+  annotate("text", x = Inf, y = -Inf,
+           label = paste("r =", round(diptera_cor_N_S, 2)),
+           hjust = 1.1, vjust = -0.5, size = 7, fontface = "italic", color = "black") +
+  annotate("text", x = -Inf, y = Inf,
+           label = "A",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+p1_dip
+
+p2_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
+  geom_point(alpha = 0.6, color = "#8B0000", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
+  stat_ellipse(type = "norm", level = 0.95, color = "#CD5C5C", linewidth = 1) +
+  theme_nice() +
+  labs(x = expression(bold(Delta*S)),
+       y = expression(bold(Delta*S[n]))) +
+  annotate("text", x = Inf, y = -Inf,
+           label = paste("r =", round(diptera_cor_Srare_S, 2)),
+           hjust = 1.1, vjust = -0.5, size = 7, fontface = "italic", color = "black") +
+  annotate("text", x = -Inf, y = Inf,
+           label = "B",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+p2_dip
+
+p3_dip <- ggplot(diptera_deltas, aes(x = Delta_S_rare, y = Delta_N/1000)) +
+  geom_point(alpha = 0.6, color = "#8B0000", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
+  stat_ellipse(type = "norm", level = 0.95, color = "#CD5C5C", linewidth = 1) +
+  theme_nice() +
+  labs(x = expression(bold(Delta*S[n])),
+       y = expression(bold(Delta*N)~bold("(in thousands)"))) +
+  annotate("text", x = Inf, y = -Inf,
+           label = paste("r =", round(diptera_cor_Nrare_S, 2)),
+           hjust = 1.1, vjust = -0.5, size = 7, fontface = "italic", color = "black")
+p3_dip
+
+# DIPTERA PLOTS - Individual traps (faceted)
+p1a_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
+  geom_point(alpha = 0.6, color = "#8B0000") +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
+  stat_ellipse(level = 0.95, color = "#CD5C5C", linewidth = 1) +
+  facet_wrap(~ TrapID) +
+  theme_nice() +
+  labs(x = expression(bold(Delta*S)),
+       y = expression(bold(Delta*N)~bold("(in thousands)")))
+p1a_dip
+
+p2a_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
+  geom_point(alpha = 0.6, color = "#8B0000") +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
+  stat_ellipse(level = 0.95, color = "#CD5C5C", linewidth = 1) +
+  facet_wrap(~ TrapID) +
+  theme_nice() +
+  labs(x = expression(bold(Delta*S)),
+       y = expression(bold(Delta*S[n])))
+p2a_dip
+
+# EPT PLOTS - Overall
+p3_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
+  geom_point(alpha = 0.6, color = "#000080", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
+  stat_ellipse(type = "norm", level = 0.95, color = "#4169E1", linewidth = 1) +
+  theme_nice() +
+  labs(x = expression(bold(Delta*S)),
+       y = expression(bold(Delta*N)~bold("(in thousands)"))) +
+  annotate("text", x = Inf, y = -Inf,
+           label = paste("r =", round(ept_cor_N_S, 2)),
+           hjust = 1.1, vjust = -0.5, size = 7, fontface = "italic", color = "black")  +
+  annotate("text", x = -Inf, y = Inf,
+           label = "C",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+p3_ept
+
+p4_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
+  geom_point(alpha = 0.6, color = "#000080", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
+  stat_ellipse(type = "norm", level = 0.95, color = "#4169E1", linewidth = 1) +
+  theme_nice() +
+  labs(x = expression(bold(Delta*S)),
+       y = expression(bold(Delta*S[n]))) +
+  annotate("text", x = Inf, y = -Inf,
+           label = paste("r =", round(ept_cor_Srare_S, 2)),
+           hjust = 1.1, vjust = -0.5, size = 7, fontface = "italic", color = "black") +
+  annotate("text", x = -Inf, y = Inf,
+           label = "D",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+p4_ept
+
+p5_dip <- ggplot(ept_deltas, aes(x = Delta_S_rare, y = Delta_N/1000)) +
+  geom_point(alpha = 0.6, color = "#000080", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
+  stat_ellipse(type = "norm", level = 0.95, color = "#4169E1", linewidth = 1) +
+  theme_nice() +
+  labs(x = expression(bold(Delta*S[n])),
+       y = expression(bold(Delta*N)~bold("(in thousands)"))) +
+  annotate("text", x = Inf, y = -Inf,
+           label = paste("r =", round(ept_cor_Nrare_S, 2)),
+           hjust = 1.1, vjust = -0.5, size = 7, fontface = "italic", color = "black")
+p5_dip
+
+# EPT PLOTS - Individual traps (faceted)
+p3a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
+  geom_point(alpha = 0.6, color = "#000080") +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
+  stat_ellipse(level = 0.95, color = "#4169E1", linewidth = 1) +
+  facet_wrap(~ TrapID) +
+  theme_nice() +
+  labs(x = expression(bold(Delta*S)),
+       y = expression(bold(Delta*N)~bold("(in thousands)")))
+p3a_ept
+
+p4a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
+  geom_point(alpha = 0.6, color = "#000080") +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
+  stat_ellipse(level = 0.95, color = "#4169E1", linewidth = 1) +
+  facet_wrap(~ TrapID) +
+  theme_nice() +
+  labs(x = expression(bold(Delta*S)),
+       y = expression(bold(Delta*S[n])))
+p4a_ept
+
+# ========== CREATE COMPOSITE PLOT ==========
+# Set up shared axis titles
+p1_final <- p1_dip +
+  ggtitle("DIPTERA") +
+  theme(axis.title.x = element_blank())
+
+p2_final <- p2_dip
+
+p3_final <- p3_ept +
+  ggtitle("EPT") +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank())
+
+p4_final <- p4_ept +
+  theme(axis.title.y = element_blank())
+
+# Combine plots
+final_composite_plot <- (p1_final / p2_final) | (p3_final / p4_final)
+
+final_composite_plot <- final_composite_plot +
+  plot_layout(heights = c(1, 1)) +
+  plot_annotation(theme = theme(plot.margin = margin(3, 3, 3, 3)))
+
+# Display the plot
+print(final_composite_plot)
+
+ggsave("Plots/Delta_N_S_Srare_plot.png", final_composite_plot, width = 12, height = 12, dpi = 300, bg = "white")
+
+# ========== DISPLAY INDIVIDUAL TRAP PLOTS ==========
+cat("\n=== DIPTERA INDIVIDUAL TRAP PLOTS ===\n")
+print(p1a_dip)
+print(p2a_dip)
+
+cat("\n=== EPT INDIVIDUAL TRAP PLOTS ===\n")
+print(p3a_ept)
+print(p4a_ept)

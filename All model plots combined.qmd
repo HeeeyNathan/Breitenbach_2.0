@@ -1,0 +1,248 @@
+---
+title: Breitenbach 2.0 - DIPTERA
+author: Nathan Jay Baker & Viktor Baranov
+editor: visual
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-overflow: scroll
+    number-sections: true
+    colorlinks: true
+  # pdf:
+  #   code-overflow: wrap
+  #   pdf-engine: lualatex
+  #   toc: true
+  #   number-sections: true
+  #   colorlinks: true
+---
+
+# Load necessary packages
+
+```{r}
+#| label: Load packges
+#| warning: false
+#| message: false
+#| code-fold: true
+
+library(tidyverse)
+library(patchwork)
+```
+
+# Set plotting parameters
+
+```{r}
+#| label: Define plotting parametres
+#| code-fold: true
+#| include: false
+#| output: false
+#| echo: false
+
+My_theme <- theme(panel.background = element_blank(),
+                  panel.border = element_rect(fill = NA, linewidth = 1.25),
+                  strip.background = element_rect(fill = "white", 
+                                                  color = "white", linewidth = 1.25),
+                  legend.position = "bottom",
+                  text = element_text(size = 16),
+                  axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Load the data
+
+```{r}
+#| label: Loading precalculated rarefaction curves
+#| warning: false
+#| message: false
+#| code-fold: true
+
+diptera_abund <- readRDS("Plots/Diptera/Diptera_abundance_model_thousand.rds") # load saved output
+diptera_rich <- readRDS("Plots/Diptera/Diptera_sppRich_model.rds")             # load saved output
+diptera_turn <- readRDS("Plots/Diptera/Diptera_turnover_model.rds")            # load saved output
+ept_abund <- readRDS("Plots/EPT/EPT_abundance_model_thousand.rds")             # load saved output
+ept_rich <- readRDS("Plots/EPT/EPT_sppRich_model.rds")                         # load saved output
+ept_turn <- readRDS("Plots/EPT/EPT_turnover_model.rds")                        # load saved output
+```
+
+# Plot the data
+
+## Diptera data
+
+### Abundance
+
+```{r}
+#| label: Plot turnover models with back transformed variables
+#| code-fold: true
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| warning: false
+
+diptera_abund <- 
+  diptera_abund +
+    annotate("text", x = -Inf, y = Inf,
+           label = "A",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+diptera_abund
+```
+
+### Richness
+
+```{r}
+#| label: Plot turnover models with back transformed variables
+#| code-fold: true
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| warning: false
+
+diptera_rich <- 
+  diptera_rich +
+    annotate("text", x = -Inf, y = Inf,
+           label = "C",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+diptera_rich
+```
+
+### Turnover
+
+```{r}
+#| label: Plot turnover models with back transformed variables
+#| code-fold: true
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| warning: false
+
+diptera_turn <- 
+  diptera_turn +
+    annotate("text", x = -Inf, y = Inf,
+           label = "E",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+
+diptera_turn
+```
+
+## EPT
+
+### Abundance
+
+```{r}
+#| label: Plot turnover models with back transformed variables
+#| code-fold: true
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| warning: false
+
+ept_abund <- 
+  ept_abund +
+    annotate("text", x = -Inf, y = Inf,
+           label = "B",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+
+ept_abund
+```
+
+### Richness
+
+```{r}
+#| label: Plot turnover models with back transformed variables
+#| code-fold: true
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| warning: false
+
+ept_rich <- 
+  ept_rich +
+    annotate("text", x = -Inf, y = Inf,
+           label = "D",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+
+ept_rich
+```
+
+### Turnover
+
+```{r}
+#| label: Plot turnover models with back transformed variables
+#| code-fold: true
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+#| warning: false
+
+ept_turn <- 
+  ept_turn +
+    annotate("text", x = -Inf, y = Inf,
+           label = "F",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+
+ept_turn
+```
+
+# Combine plots
+
+```{r}
+#| label: Plot turnover models with back transformed variables
+#| code-fold: true
+#| fig-height: 18
+#| fig-width: 12
+#| fig-format: svg
+#| warning: false
+
+# combine plots
+composite_plot <- (diptera_abund | ept_abund) /
+                  (diptera_rich | ept_rich) /
+                  (diptera_turn | ept_turn)
+
+# Remove legends from individual plots and remove x-axis labels from top/middle plots
+composite_plot <- (diptera_abund + 
+                    theme(legend.position = "none", 
+                          axis.text.x = element_blank(), 
+                          axis.title.x = element_blank()) | 
+                   ept_abund + 
+                    theme(legend.position = "none", 
+                          axis.title.y = element_blank(),
+                          axis.text.x = element_blank(), 
+                          axis.title.x = element_blank())) /
+                  (diptera_rich + 
+                    theme(legend.position = "none", 
+                          axis.text.x = element_blank(), 
+                          axis.title.x = element_blank()) | 
+                   ept_rich + 
+                    theme(legend.position = "none", 
+                          axis.title.y = element_blank(),
+                          axis.text.x = element_blank(), 
+                          axis.title.x = element_blank())) /
+                  (diptera_turn + 
+                    theme(legend.position = "none") | 
+                   ept_turn + 
+                    theme(axis.title.y = element_blank()))
+
+# Add overall layout with one legend at bottom
+composite_plot <- composite_plot + 
+  plot_layout(
+    guides = "collect"
+  ) +
+  plot_annotation(
+    theme = theme(legend.position = "bottom", 
+                  legend.direction = "horizontal",
+                  legend.title = element_blank(),
+                  legend.box = "horizontal",
+                  legend.box.just = "center",
+                  legend.justification = "center",
+                  legend.text = element_text(size = 16),
+                  legend.key.size = unit(1.5, "cm"),
+                  legend.spacing.x = unit(0.5, "cm"))
+  ) &
+  guides(
+    color = guide_legend(nrow = 1, byrow = TRUE),
+    fill = guide_legend(nrow = 1, byrow = TRUE),
+    shape = guide_legend(nrow = 1, byrow = TRUE)
+  )
+
+# Display the plot
+print(composite_plot)
+
+ggsave("Plots/All_model_outputs.png", plot = composite_plot, width = 12, height = 18, dpi = 300, bg = "white")
+```

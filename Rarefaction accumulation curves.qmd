@@ -1,0 +1,304 @@
+---
+title: Breitenbach 2.0 - DIPTERA
+author: Nathan Jay Baker & Viktor Baranov
+editor: visual
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-overflow: scroll
+    number-sections: true
+    colorlinks: true
+  # pdf:
+  #   code-overflow: wrap
+  #   pdf-engine: lualatex
+  #   toc: true
+  #   number-sections: true
+  #   colorlinks: true
+---
+
+# Load necessary packages
+
+```{r}
+#| label: Load packges
+#| warning: false
+#| message: false
+#| code-fold: true
+
+library(tidyverse)
+library(patchwork)
+library(iNEXT)
+library(scales)
+```
+
+# Set plotting parameters
+
+```{r}
+#| label: Define plotting parametres
+#| code-fold: true
+#| include: false
+#| output: false
+#| echo: false
+
+My_theme <- theme(panel.background = element_blank(),
+                  panel.border = element_rect(fill = NA, linewidth = 1.25),
+                  strip.background = element_rect(fill = "white", 
+                                                  color = "white", linewidth = 1.25),
+                  legend.position = "bottom",
+                  text = element_text(size = 16),
+                  axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Load the data
+
+```{r}
+#| label: Loading precalculated rarefaction curves
+#| warning: false
+#| message: false
+#| code-fold: true
+
+diptera_cum.rare <- readRDS("Outputs/rarefaction_diptera.rds")       # load saved output
+ept_cum.rare <- readRDS("Outputs/rarefaction_ept.rds")               # load saved output
+TD <- readRDS("Outputs/Diptera_TD.rds")                              # load saved output
+```
+
+# Create Colour Pallette
+
+```{r}
+# Define color and shape palette for traps (using your specified method)
+trap_colours <- hue_pal()(length(unique(TD$ftrap)))
+names(trap_colours) <- levels(TD$ftrap)
+trap_shapes <- setNames(rep(16:19, length.out = length(trap_colours)), levels(TD$ftrap))
+
+# Add black for overall trend if needed
+trap_colors <- c(trap_colours, "Overall" = "#000000")
+```
+
+# Plot the data
+
+## Diptera data
+
+```{r}
+#| label: Plotting all accumulation curves in the same plot
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 8
+#| fig-format: svg
+
+# Increase penalty to avoid scientific notation
+options(scipen = 999)
+
+# Create the base plot with ggiNEXT
+diptera_plot <- ggiNEXT(diptera_cum.rare, type = 1, color.var = "Assemblage")
+
+diptera_plot <- diptera_plot + 
+  # Apply the harmonized color palette
+  scale_color_manual(
+    values = trap_colors,
+    name = "Trap Type"
+  ) +
+  scale_fill_manual(
+    values = trap_colors,
+    name = "Trap Type"
+  ) +
+  # Update theme elements
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    axis.title = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 14),
+    axis.text.x = element_text(margin = margin(t = 5), angle = 45, hjust = 1),
+    axis.title.y = element_text(margin = margin(r = 10)),
+    legend.position = "bottom",
+    legend.margin = margin(t = 10),
+    legend.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 14),
+    legend.key.size = unit(1.8, "lines"),
+    legend.key.width = unit(2, "lines"),
+    legend.spacing.x = unit(0.3, "cm"),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.margin = margin(15, 15, 10, 10)
+  ) +
+  # Set y-axis breaks every 50 units
+  scale_y_continuous(
+    labels = scales::comma,
+    breaks = function(x) seq(0, max(x), by = 50)
+  ) +
+  # Set x-axis breaks every 50,000 units
+  scale_x_continuous(
+    labels = scales::comma,
+    breaks = function(x) seq(0, max(750000), by = 50000)
+  ) +
+  # Add custom axis labels
+  labs(title = "DIPTERA", y = "Species richness (q = 0)") +
+  # Add vertical reference line
+  geom_vline(xintercept = 359482, color = "red", linetype = "dashed", linewidth = 0.5)
+
+# Update point and line aesthetics
+diptera_plot$layers <- lapply(diptera_plot$layers, function(layer) {
+  # Find geom_line and modify it
+  if(inherits(layer$geom, "GeomLine")) {
+    layer$aes_params$linewidth <- 0.8
+  }
+  # Find geom_point and modify it
+  if(inherits(layer$geom, "GeomPoint")) {
+    layer$aes_params$size <- 2
+    layer$aes_params$shape <- 21
+    layer$aes_params$fill <- "white"
+    layer$aes_params$stroke <- 0.8
+  }
+  # Modify ribbon/confidence interval if present
+  if(inherits(layer$geom, "GeomRibbon")) {
+    layer$aes_params$alpha <- 0.4
+    layer$aes_params$linetype <- 0
+  }
+  return(layer)
+})
+
+# Display the plot
+diptera_plot <- 
+  diptera_plot +
+  annotate("text", x = -Inf, y = Inf,
+           label = "A",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+
+diptera_plot
+
+# Save the plot
+# ggsave("Plots/Diptera/Rarefaction_diptera.png", diptera_plot, width = 7, height = 7, dpi = 300, bg = "white")
+```
+
+## EPT data
+
+```{r}
+#| label: Plotting all accumulation curves in the same plot
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 8
+#| fig-format: svg
+
+# Increase penalty to avoid scientific notation
+options(scipen = 999) 
+
+# Create the base plot with ggiNEXT
+ept_plot <- ggiNEXT(ept_cum.rare, type = 1, color.var = "Assemblage")
+
+# plot
+ept_plot <- ept_plot + 
+  # Apply the harmonized color palette
+  scale_color_manual(
+    values = trap_colors,
+    name = "Trap Type"
+  ) +
+  scale_fill_manual(
+    values = trap_colors,
+    name = "Trap Type"
+  ) +
+  # Update theme elements
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    axis.title = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 14),
+    axis.text.x = element_text(margin = margin(t = 5), angle = 45, hjust = 1),
+    axis.title.y = element_text(margin = margin(r = 10)),
+    legend.position = "bottom",
+    legend.margin = margin(t = 10),
+    legend.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 14),
+    legend.key.size = unit(1.8, "lines"),
+    legend.key.width = unit(2, "lines"),
+    legend.spacing.x = unit(0.3, "cm"),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.margin = margin(15, 15, 10, 10)
+  ) +
+  # Set y-axis breaks every 10 units
+  scale_y_continuous(
+    labels = scales::comma,
+    breaks = function(x) seq(0, max(x), by = 10)
+  ) +
+  # Set x-axis limit to 750,000 with breaks every 50,000 units
+  scale_x_continuous(
+    limits = c(0, 750000),
+    labels = scales::comma,
+    breaks = seq(0, 750000, by = 50000)
+  ) +
+  # Add custom axis labels
+  labs(title = "EPT", y = "Species richness (q = 0)") +
+  # Add vertical reference line
+  geom_vline(xintercept = 359482, color = "red", linetype = "dashed", linewidth = 0.5)
+
+# Update point and line aesthetics for EPT plot
+ept_plot$layers <- lapply(ept_plot$layers, function(layer) {
+  # Find geom_line and modify it
+  if(inherits(layer$geom, "GeomLine")) {
+    layer$aes_params$linewidth <- 0.8
+  }
+  # Find geom_point and modify it
+  if(inherits(layer$geom, "GeomPoint")) {
+    layer$aes_params$size <- 2
+    layer$aes_params$shape <- 21
+    layer$aes_params$fill <- "white"
+    layer$aes_params$stroke <- 0.8
+  }
+  # Modify ribbon/confidence interval if present
+  if(inherits(layer$geom, "GeomRibbon")) {
+    layer$aes_params$alpha <- 0.4
+    layer$aes_params$linetype <- 0
+  }
+  return(layer)
+})
+
+ept_plot <- 
+  ept_plot +
+  annotate("text", x = -Inf, y = Inf,
+           label = "B",
+           hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
+
+ept_plot
+
+# Save the plot
+# ggsave("Plots/EPT/Rarefaction_ept.png", ept_plot, width = 7, height = 7, dpi = 300, bg = "white")
+```
+
+# Combine plots
+
+```{r}
+#| label: Plotting all accumulation curves in the same plot
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 7
+#| fig-width: 12
+#| fig-format: svg
+
+# Remove y-axis label from EPT plot
+ept_plot <- ept_plot + 
+  theme(axis.title.y = element_blank())
+
+# Combine plots with harmonized legend aesthetics
+combined_plot <- diptera_plot + ept_plot + 
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    theme = theme(
+      legend.position = "bottom",
+      legend.margin = margin(t = 10),
+      legend.title = element_text(size = 16, face = "bold"),
+      legend.text = element_text(size = 14),
+      legend.key.size = unit(1.8, "lines"),
+      legend.key.width = unit(2, "lines"),
+      legend.spacing.x = unit(0.3, "cm"),
+      plot.tag = element_text(size = 12, face = "bold")
+    )
+  )
+
+combined_plot
+ggsave("Plots/Rarefaction_dipt_ept.png", combined_plot, width = 12, height = 8, dpi = 300, bg = "white")
+```
