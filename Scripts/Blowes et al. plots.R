@@ -285,8 +285,11 @@ p1a_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   facet_wrap(~ TrapID) +
   theme_nice() +
   labs(x = expression(bold(Delta*S)),
-       y = expression(bold(Delta*N)~bold("(in thousands)")))
+       y = expression(bold(Delta*N)~bold("(in thousands)")),
+       title = "DIPTERA")
 p1a_dip
+
+ggsave("Plots/Diptera/Delta_N_S_plot_diptera.png", p1a_dip, width = 12, height = 12, dpi = 300, bg = "white")
 
 p2a_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
   geom_point(alpha = 0.6, color = "#8B0000") +
@@ -295,8 +298,11 @@ p2a_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
   facet_wrap(~ TrapID) +
   theme_nice() +
   labs(x = expression(bold(Delta*S)),
-       y = expression(bold(Delta*S[n])))
+       y = expression(bold(Delta*S[n])),
+       title = "DIPTERA")
 p2a_dip
+
+ggsave("Plots/Diptera/Delta_S_Srare_plot_diptera.png", p2a_dip, width = 12, height = 12, dpi = 300, bg = "white")
 
 # EPT PLOTS - Overall
 p3_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
@@ -349,8 +355,11 @@ p3a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   facet_wrap(~ TrapID) +
   theme_nice() +
   labs(x = expression(bold(Delta*S)),
-       y = expression(bold(Delta*N)~bold("(in thousands)")))
+       y = expression(bold(Delta*N)~bold("(in thousands)")),
+       title = "EPT")
 p3a_ept
+
+ggsave("Plots/EPT/Delta_N_S_plot_ept.png", p3a_ept, width = 12, height = 12, dpi = 300, bg = "white")
 
 p4a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
   geom_point(alpha = 0.6, color = "#000080") +
@@ -359,8 +368,11 @@ p4a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
   facet_wrap(~ TrapID) +
   theme_nice() +
   labs(x = expression(bold(Delta*S)),
-       y = expression(bold(Delta*S[n])))
+       y = expression(bold(Delta*S[n])),
+       title = "EPT")
 p4a_ept
+
+ggsave("Plots/EPT/Delta_S_Srare_plot_ept.png", p4a_ept, width = 12, height = 12, dpi = 300, bg = "white")
 
 # ========== CREATE COMPOSITE PLOT ==========
 # Set up shared axis titles
@@ -390,10 +402,8 @@ print(final_composite_plot)
 ggsave("Plots/Delta_N_S_Srare_plot.png", final_composite_plot, width = 12, height = 12, dpi = 300, bg = "white")
 
 # ========== DISPLAY INDIVIDUAL TRAP PLOTS ==========
-cat("\n=== DIPTERA INDIVIDUAL TRAP PLOTS ===\n")
 print(p1a_dip)
 print(p2a_dip)
 
-cat("\n=== EPT INDIVIDUAL TRAP PLOTS ===\n")
 print(p3a_ept)
 print(p4a_ept)
