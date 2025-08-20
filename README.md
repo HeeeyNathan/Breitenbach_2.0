@@ -1,7 +1,6 @@
 # Comparing species accumulation within taxonomically well- and poorly-resolved insect groups over 37-years
 
 [![R](https://img.shields.io/badge/R-4.4.2-blue.svg)](https://www.r-project.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Overview
 
@@ -9,7 +8,7 @@ This repository contains the complete analytical pipeline for examining the infl
 
 ## Authors
 
-**Nathan Jay Baker**, **Jonas Jourdan**, **Francesca Pilotto**, **Rüdiger Wagner**, **Jessica Awad**, **Valerio Caruso**, **Caroline Chimeno**, **Amelie Höcherl**, **Marija Ivković**, **Marina Moser**, **Viktor Baranov**
+**Nathan Jay Baker**, **Viktor Baranov**
 
 ---
 
@@ -33,8 +32,8 @@ This repository contains the complete analytical pipeline for examining the infl
 
 ```
 ├── Data/
-│   └── Breitenbach_community_data_17.12.2024.xlsx    # Main dataset
-├── Outputs/                                           # Saved analysis outputs
+│   └── Breitenbach_community_data_17.12.2024.xlsx   # Main dataset
+├── Outputs/                                         # Saved analysis outputs
 │   ├── ChoasDiversityProfilesDiptera.rds
 │   ├── ChoasDiversityProfilesEPT.rds
 │   ├── rarefaction_diptera.rds
@@ -42,20 +41,17 @@ This repository contains the complete analytical pipeline for examining the infl
 │   ├── chaohill_results_diptera.rds
 │   ├── chaohill_results_ept.rds
 │   └── Diptera_TD.rds
-├── Plots/                                             # Generated figures
-│   ├── All plots for publication/                    # Publication-ready figures
-│   ├── Diptera/                                      # Diptera-specific plots
-│   └── EPT/                                          # EPT-specific plots
-├── Taxonomy information/                              # Taxonomic data exports
-├── .Rproj.user/                                      # RStudio project files
-├── .Rhistory
-├── .gitignore
+├── Plots/                                           # Generated figures
+│   ├── All plots for publication/                   # Publication-ready figures
+│   ├── Diptera/                                     # Diptera-specific plots
+│   └── EPT/                                         # EPT-specific plots
+├── Taxonomy information/                            # Taxonomic data exports
 ├── Breitenbach_2.0.Rproj                            # RStudio project file
 ├── HighstatLibV15.R                                 # Custom statistical functions
 ├── EPT_result_summary.qmd                           # Main EPT analysis
 ├── Diptera_result_summary.qmd                       # Main Diptera analysis
-├── Chao-Hill plots by trap.qmd                      # Diversity profile analysis
-├── Blowes et al. 2022 plots.qmd                    # Delta analysis (Blowes method)
+├── Chao-Hill plots by trap.qmd                      # Diversity profile analysis (Chao & Jost 2015 method)
+├── Blowes et al. 2022 plots.qmd                     # Delta analysis (Blowes et al. 2022 method)
 ├── Rarefaction plots combined.qmd                   # Combined rarefaction plots
 └── All model plots combined.qmd                     # Combined model visualizations
 ```
@@ -67,9 +63,12 @@ This repository contains the complete analytical pipeline for examining the infl
 ### Primary Dataset
 - **File**: `Breitenbach_community_data_17.12.2024.xlsx`
 - **Format**: Excel spreadsheet with species abundance data
-- **Structure**:
-  - Columns: `taxa_id`, `original_name`, `validated_name`, `family`, `order`, `trap`, year columns (1969-2006)
-  - Rows: Individual species records with abundance counts per year and trap
+- **Structure**: 
+  - **Taxonomic columns**: `taxa_id`, `original_name`, `harmonized_name`, `validated_name`, `family`, `Order`
+  - **Spatial column**: `trap` (trap locations: A, B, C, E, G, I, III, plus excluded traps)
+  - **Temporal columns**: Annual abundance counts from `1969` to `2006` (38 years)
+  - **Data type**: Integer abundance counts per species-trap-year combination
+- **Rows**: Individual species records with yearly abundance data across all traps
 
 ### Data Collection Details
 - **Study Period**: 37 years (1969-2006)
@@ -84,7 +83,7 @@ This repository contains the complete analytical pipeline for examining the infl
 ## Dependencies
 
 ### R Version
-- **R**: 4.4.2 (2024-10-31) "Pile of Leaves"
+- **R**: 4.4.2 
 - **Platform**: x86_64-w64-mingw32/x64
 
 ### Core Packages
@@ -125,7 +124,7 @@ library(data.table)       # Fast data manipulation
 
 ### Custom Functions
 - **File**: `HighstatLibV15.R`
-- **Source**: Zuur, A.F. and Ieno, E.N. (GLMM books)
+- **Source**: Zuur, A. F. ., & Ieno, E. N. . (2021). The world of zero-inflated models: Volume 1.
 - **Functions**: Data standardization (`MyStd()`), diagnostic plots (`Mydotplot()`)
 
 ---
@@ -174,7 +173,7 @@ The analysis follows a hierarchical approach with two main taxonomic groups:
 ### Phase 2: Biodiversity Metrics
 1. **Basic Indices**: Species richness, Shannon diversity, Simpson diversity, evenness
 2. **Chao Estimators**: Species richness estimation for individual communities
-3. **Diversity Profiles**: Hill numbers (q = 0, 1, 2) with confidence intervals
+3. **Diversity Profiles**: Hill numbers (q = 0, 1, 2, 3) with confidence intervals
 4. **Turnover Analysis**: Species appearance/disappearance rates between years
 5. **Rarefaction Curves**: Individual-based accumulation curves using iNEXT
 
@@ -244,7 +243,7 @@ glmmTMB(Response ~ poly(year.std, degree) + (1 | ftrap) + ar1(0 + factor(year.st
 - **Storage**: ~500MB for outputs and figures
 
 ### Processing Notes
-- **Parallel Processing**: Analysis uses `future.apply` with 4-15 workers
+- **Parallel Processing**: Analysis uses `future.apply`
 - **Memory Management**: Large objects cached as .rds files
 - **Runtime**: Complete analysis ~30-60 minutes depending on hardware
 
@@ -257,7 +256,7 @@ glmmTMB(Response ~ poly(year.std, degree) + (1 | ftrap) + ar1(0 + factor(year.st
 ### Memory Optimization
 ```r
 # Increase memory limits for parallel processing
-options(future.globals.maxSize = 3000 * 1024^3)  # 3GB limit
+options(future.globals.maxSize = 2000 * 1024^2)  # 2GB limit
 
 # Clean environment between major steps
 rm(large_objects)
@@ -275,7 +274,7 @@ gc()
 **Solution**:
 ```r
 # Reduce number of parallel workers
-plan(multisession, workers = 4)  # Instead of 15
+plan(multisession, workers = 5)  # Instead of 15
 
 # Increase memory limit
 memory.limit(size = 16000)  # Windows only
@@ -398,9 +397,9 @@ GitHub repository: https://github.com/username/breitenbach-ecology
 ```
 
 ### Key References
-- **Methodology**: Blowes, S.A., et al. (2022). *Ecology Letters*
-- **Statistical Functions**: Zuur, A.F. & Ieno, E.N. GLMM implementation guides
-- **Diversity Analysis**: Chao, A. & Jost, L. (2015). *Methods in Ecology and Evolution*
+- **Methodology**: Blowes, S.A. et al. 2022. Local biodiversity change reflects interactions among changing abundance, evenness, and richness. *Ecology* 103, e3820.
+- **Statistical Functions**: Zuur, A. F. ., & Ieno, E. N. . (2021). The world of zero-inflated models: Volume 1.
+- **Diversity Analysis**: Chao, A. & Jost, L. 2015. Estimating diversity and entropy profiles via discovery rates of new species. *Methods Ecol. Evol.* 6, 873–882.
 
 ---
 
@@ -417,12 +416,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contact
 
 **Primary Contact**: Nathan Jay Baker
-**Email**: [email]
-**ORCID**: [orcid-id]
+**Email**: Nathan93Baker@gmail.com
+**ORCID**: https://orcid.org/0000-0001-7948-106X
 
 **Senior Author**: Viktor Baranov
-**Email**: [email]
-**ORCID**: [orcid-id]
+**Email**: baranowiktor@gmail.com
+**ORCID**: https://orcid.org/0000-0001-6441-4016
 
 ### Contributing
 We welcome contributions and questions. Please:
@@ -440,5 +439,4 @@ We welcome contributions and questions. Please:
 ## Acknowledgments
 
 - Breitenbach stream research station for long-term data collection
-- Contributors to the R ecosystem, especially `glmmTMB`, `iNEXT`, and `vegan` packages
-- Zuur & Ieno for statistical functions and guidance
+
