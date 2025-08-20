@@ -344,38 +344,25 @@ graph TD
     B --> C[Split by Taxonomic Group]
     C --> D[EPT Analysis<br/>EPT_result_summary.qmd]
     C --> E[Diptera Analysis<br/>Diptera_result_summary.qmd]
-
-    D --> F[Basic Indices<br/>Richness, Diversity, Turnover]
-    D --> G[Diversity Profiles<br/>Chao-Hill Numbers]
-    D --> H[Rarefaction Curves<br/>iNEXT Analysis]
-    D --> I[Temporal Models<br/>GLMMs]
-
-    E --> J[Basic Indices<br/>Richness, Diversity, Turnover]
-    E --> K[Diversity Profiles<br/>Chao-Hill Numbers]
-    E --> L[Rarefaction Curves<br/>iNEXT Analysis]
-    E --> M[Temporal Models<br/>GLMMs]
-
-    G --> N[Combined Diversity Plots<br/>Chao-Hill plots by trap.qmd]
-    K --> N
-
-    H --> O[Combined Rarefaction<br/>Rarefaction plots combined.qmd]
-    L --> O
-
-    I --> P[Combined Model Plots<br/>All model plots combined.qmd]
-    M --> P
-
-    F --> Q[Delta Analysis<br/>Blowes et al. 2022 plots.qmd]
-    J --> Q
-
-    N --> R[Publication Figures]
-    O --> R
-    P --> R
-    Q --> R
-
+    
+    D --> F[Core Analyses:<br/>• Basic Indices<br/>• Diversity Profiles<br/>• Rarefaction Curves<br/>• Temporal Models]
+    E --> F
+    
+    F --> G[Combined Diversity Plots<br/>Chao-Hill plots by trap.qmd]
+    F --> H[Combined Rarefaction<br/>Rarefaction plots combined.qmd]
+    F --> I[Combined Model Plots<br/>All model plots combined.qmd]
+    F --> J[Delta Analysis<br/>Blowes et al. 2022 plots.qmd]
+    
+    G --> K[Publication Figures]
+    H --> K
+    I --> K
+    J --> K
+    
     style A fill:#e1f5fe
-    style R fill:#c8e6c9
+    style K fill:#c8e6c9
     style D fill:#fff3e0
     style E fill:#fff3e0
+    style F fill:#f3e5f5
 ```
 
 ---
@@ -405,11 +392,10 @@ GitHub repository: https://github.com/username/breitenbach-ecology
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project and code are free software and comes with ABSOLUTELY NO WARRANTY.
 
 ### Data Usage
-- Raw data usage requires citation of the original Wagner et al. (2011) study
-- Processed outputs available under MIT license with attribution
+- Raw data usage requires citation
 
 ---
 
