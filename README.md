@@ -392,7 +392,7 @@ insect groups over 37-years.
 
 ### Code and Data
 ```
-Baker, N.J., Baranov, V., et al. (2025). Breitenbach Freshwater Ecology Analysis.
+Baker, N.J., Baranov, V. (2025). Breitenbach Freshwater Ecology Analysis.
 GitHub repository: https://github.com/username/breitenbach-ecology
 ```
 
