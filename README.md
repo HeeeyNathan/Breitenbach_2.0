@@ -133,7 +133,7 @@ library(data.table)       # Fast data manipulation
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/username/breitenbach-ecology.git
+git clone https://github.com/HeeeyNathan/Breitenbach_2.0
 cd breitenbach-ecology
 ```
 
@@ -380,7 +380,7 @@ insect groups over 37-years.
 ### Code and Data
 ```
 Baker, N.J., Baranov, V. (2025). Breitenbach Freshwater Ecology Analysis.
-GitHub repository: https://github.com/username/breitenbach-ecology
+GitHub repository: https://github.com/HeeeyNathan/Breitenbach_2.0
 ```
 
 ### Key References
@@ -416,7 +416,7 @@ We welcome contributions and questions. Please:
 3. Follow existing code style and documentation standards
 
 ### Support
-- Check [Issues](https://github.com/username/breitenbach-ecology/issues) for common problems
+- Check [Issues](https://github.com/HeeeyNathan/Breitenbach_2.0/issues) for common problems
 - Create a new issue with reproducible example for help
 - Include session info (`sessionInfo()`) when reporting bugs
 
