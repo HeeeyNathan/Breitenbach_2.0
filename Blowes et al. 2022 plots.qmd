@@ -5,18 +5,19 @@ editor: visual
 date: "`r Sys.Date()`"
 format:
   html:
-    code-overflow: scroll
     number-sections: true
+    code-overflow: scroll
     colorlinks: true
+    warning: false
+    message: false
+    code-fold: true
+    fig-format: png
 ---
 
 # Load necessary packages
 
 ```{r}
 #| label: Load packges
-#| warning: false
-#| message: false
-#| code-fold: true
 
 library(tidyverse)
 library(patchwork)
@@ -42,9 +43,6 @@ library(grid)
 
 ```{r}
 #| label: Load data
-#| warning: false
-#| message: false
-#| code-fold: true
 
 data <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |> # read in excel spreadsheet
   as_tibble() |>                                                           # Make tibble table
@@ -86,9 +84,6 @@ ept <- data |>
 
 ```{r}
 #| label: Initial data wrangling
-#| warning: false
-#| message: false
-#| code-fold: true
 
 # Remove unwanted traps
 diptera_clean <- diptera |>
@@ -132,10 +127,7 @@ ept_long <- ept_clean |>
 # FUNCTION TO CALCULATE DELTAS
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
+#| label: Function to calculate deltas
 
 calculate_deltas <- function(long_data, group_name) {
   # Separate trap and year
@@ -228,10 +220,7 @@ calculate_deltas <- function(long_data, group_name) {
 ### DIPTERA
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
+#| label: Calculate Diptera deltas
 
 diptera_deltas <- calculate_deltas(diptera_long, "Diptera")
 ```
@@ -239,10 +228,7 @@ diptera_deltas <- calculate_deltas(diptera_long, "Diptera")
 ### EPT
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
+#| label: Calculate EPT deltas
 
 ept_deltas <- calculate_deltas(ept_long, "EPT")
 ```
@@ -252,10 +238,7 @@ ept_deltas <- calculate_deltas(ept_long, "EPT")
 ### DIPTERA
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
+#| label: Calculate Diptera correlations
 
 diptera_cor_N_S <- cor(diptera_deltas$Delta_N, diptera_deltas$Delta_S, use = "complete.obs")
 diptera_cor_Srare_S <- cor(diptera_deltas$Delta_S_rare, diptera_deltas$Delta_S, use = "complete.obs")
@@ -265,10 +248,7 @@ diptera_cor_Nrare_S <- cor(diptera_deltas$Delta_N, diptera_deltas$Delta_S_rare, 
 ### EPT
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
+#| label: Calculate EPT correlations
 
 ept_cor_N_S <- cor(ept_deltas$Delta_N, ept_deltas$Delta_S, use = "complete.obs")
 ept_cor_Srare_S <- cor(ept_deltas$Delta_S_rare, ept_deltas$Delta_S, use = "complete.obs")
@@ -280,10 +260,7 @@ ept_cor_Nrare_S <- cor(ept_deltas$Delta_N, ept_deltas$Delta_S_rare, use = "compl
 ## Define theme
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
+#| label: Define plotting theme
 
 theme_nice <- function() {
   theme_minimal() +
@@ -308,12 +285,9 @@ theme_nice <- function() {
 ### Overall
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
+#| label: Define overall plots for Diptera
 #| fig-height: 10
 #| fig-width: 10
-#| fig-format: svg
 
 p1_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   geom_point(alpha = 0.6, color = "#8B0000", size = 3) +
@@ -361,12 +335,9 @@ p3_dip
 ### Individual traps
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
+#| label: Define trap plots for Diptera
 #| fig-height: 10
 #| fig-width: 10
-#| fig-format: svg
 
 p1a_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   geom_point(alpha = 0.6, color = "#8B0000") +
@@ -400,12 +371,9 @@ ggsave("Plots/All plots for publication/FigureS2.png", p2a_dip, width = 12, heig
 ### Overall
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
+#| label: Define overall plots for EPT
 #| fig-height: 10
 #| fig-width: 10
-#| fig-format: svg
 
 p4_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   geom_point(alpha = 0.6, color = "#000080", size = 3) +
@@ -453,12 +421,9 @@ p6_dip
 ### Individual traps
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
+#| label: Define traps plots for EPT
 #| fig-height: 10
 #| fig-width: 10
-#| fig-format: svg
 
 p4a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   geom_point(alpha = 0.6, color = "#000080") +
@@ -490,12 +455,9 @@ ggsave("Plots/All plots for publication/FigureS4.png", p5a_ept, width = 12, heig
 ## Combined plot
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
+#| label: Combine plots for Diptera and EPT
 #| fig-height: 10
 #| fig-width: 10
-#| fig-format: svg
 
 # Set up shared axis titles
 p1_final <- p1_dip +

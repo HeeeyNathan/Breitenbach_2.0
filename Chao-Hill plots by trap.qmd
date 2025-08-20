@@ -5,18 +5,19 @@ editor: visual
 date: "`r Sys.Date()`"
 format:
   html:
-    code-overflow: scroll
     number-sections: true
+    code-overflow: scroll
     colorlinks: true
+    warning: false
+    message: false
+    code-fold: true
+    fig-format: png
 ---
 
 # Load necessary packages
 
 ```{r}
 #| label: Load packges
-#| warning: false
-#| message: false
-#| code-fold: true
 
 library(tidyverse)
 library(janitor)
@@ -37,9 +38,6 @@ library(future.apply)
 
 ```{r}
 #| label: Load data
-#| warning: false
-#| message: false
-#| code-fold: true
 
 data <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |> # read in excel spreadsheet
   as_tibble() |>                                                           # Make tibble table
@@ -81,9 +79,6 @@ ept <- data |>
 
 ```{r}
 #| label: Initial data wrangling
-#| warning: false
-#| message: false
-#| code-fold: true
 
 # Remove unwanted traps
 diptera_clean <- diptera |>
@@ -165,9 +160,7 @@ ept_wide <- ept_agg |>
 ### DIPTERA abundance
 
 ```{r}
-#| warning: false
-#| message: false
-#| code-fold: true
+#| label: Calculate total Diptera abundance
 
 # total abundance of diptera
 diptera_agg |>
@@ -179,9 +172,7 @@ diptera_agg |>
 ### DIPTERA richness
 
 ```{r}
-#| warning: false
-#| message: false
-#| code-fold: true
+#| label: Calculate total Diptera richness
 
 # total species richness of diptera
 diptera_agg |> 
@@ -192,9 +183,7 @@ diptera_agg |>
 ### EPT abundance
 
 ```{r}
-#| warning: false
-#| message: false
-#| code-fold: true
+#| label: Calculate total EPT abundance
 
 # total abundance of ept
 ept_agg |>
@@ -206,9 +195,7 @@ ept_agg |>
 ### EPT richness
 
 ```{r}
-#| warning: false
-#| message: false
-#| code-fold: true
+#| label: Calculate total EPT richness
 
 # total species richness of diptera
 ept_agg |> 
@@ -231,11 +218,6 @@ Chao_Hill_abu(x, q) is a function of obtaining estimators of Hill numbers of ord
 @return a numerical vector of diversity.
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
-
 Chao_Hill_abu = function(x,q){
   x = x[x>0]
   n = sum(x)
@@ -281,11 +263,6 @@ Chao_Hill_inc(x, q) is a function of obtaining estimators of Hill numbers of ord
 @return a numerical vector.
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
-
 Chao_Hill_inc = function(x,q){
   n = x[1]
   x = x[-1];x = x[x>0]
@@ -350,11 +327,6 @@ Hill(x, q, datatype) is a function of obtaining the empirical Hill numbers of or
 @return a numerical vector.
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
-
 Hill <- function(x,q,datatype = c("abundance","incidence")){
   if(datatype=="incidence"){x = x[-1]}
   p <- x[x>0]/sum(x)
@@ -376,11 +348,6 @@ Bt_prob_abu(x) is a function of estimating the species probabilities in the boot
 @return a numeric vector.
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
-
 Bt_prob_abu = function(x){
   x = x[x>0]
   n = sum(x)
@@ -404,11 +371,6 @@ Bt_prob_inc(x) is a function of estimating the species incidence probabilities i
 @return a numeric vector.
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
-
 Bt_prob_inc = function(x){
   n = x[1]
   x = x[-1]
@@ -436,11 +398,6 @@ Bt_prob(x,datatype) combines the two functions Bt_prob_abu and Bt_prob_inc for a
 @return a numeric vector.
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
-
 Bt_prob = function(x,datatype = c("abundance","incidence")){
   datatype = match.arg(datatype,c("abundance","incidence"))
   if(datatype == "abundance"){
@@ -467,11 +424,6 @@ Bootstrap.CI(x,q,B,datatype,conf) is a function of calculating the bootsrapping 
 @return a list, consisting of 3 matrices including respectively the difference between the average and lower confidence bound of the B bootstrap estimates, the difference between the upper confidence bound and the average of the B bootstrap estimates, and the bootstrap standard error of the diversity estimate. In each matrix, the first row gives the results for the empirical diversity, and the second row gives the results for the proposed diversity estimates. Columns give the results for different orders of q.
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
-
 Bootstrap.CI = function(x,q,B = 1000, datatype = c("abundance","incidence"),conf = 0.95){
   datatype = match.arg(datatype,c("abundance","incidence"))
   p.new = Bt_prob(x,datatype)
@@ -530,11 +482,6 @@ ChaoHill(dat, datatype, from, to, interval, B, conf) is the function of calculat
 @return a list, consisting of 4 matrices including respectively diversity estimates, bootstrap standard errors, lower confidence bounds, and upper confidence bounds. In each matrix, the first row gives the results for the empirical diversity, and the second row gives the results for the proposed diversity estimates. Columns give the results for different orders of q.
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
-
 ChaoHill <- function(dat, datatype=c("abundance", "incidence"), from=0, to=3, interval=0.1, B=1000, conf=0.95){
   datatype = match.arg(datatype,c("abundance","incidence"))
   # for real data estimation
@@ -595,11 +542,6 @@ conf.reg(x_axis,LCL,UCL,...) is a function to plot the confidence region.
 @return a polygon plot
 
 ```{r}
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
-
 conf.reg=function(x_axis,LCL,UCL,...) {
   x.sort <- order(x_axis)
   x <- x_axis[x.sort]
@@ -615,10 +557,6 @@ conf.reg=function(x_axis,LCL,UCL,...) {
 
 ```{r}
 #| label: Run analysis for Diptera
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
 
 plan(multisession, workers = 4)  # Use 10 of your 20 available threads
 
@@ -692,10 +630,6 @@ chaohill_results <- readRDS("Outputs/chaohill_results_diptera.rds")  # read resu
 
 ```{r}
 #| label: Run analysis for EPT
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
 
 plan(multisession, workers = 4)  # Use 10 of your 20 available threads
 
@@ -772,12 +706,8 @@ ept_chaohill_results <- readRDS("Outputs/chaohill_results_ept.rds")  # read resu
 
 ```{r}
 #| label: Plot data in long format (2 columns, 7 rows)
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 20
 #| fig-width: 8
-#| fig-format: svg
 
 # png("Plots/All plots for publication/Figure3_long.png", width = 8, height = 20, res = 450, bg = "white")
 
@@ -916,15 +846,10 @@ legend("bottom",
 
 ```{r}
 #| label: Plot data in long format (7 columns, 2 rows)
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
 #| fig-height: 8
 #| fig-width: 20
-#| fig-format: svg
 
-png("Plots/All plots for publication/Figure3.png", width = 20, height = 7, unit = "in", res = 450, bg = "white")
+# png("Plots/All plots for publication/Figure3.png", width = 20, height = 7, unit = "in", res = 450, bg = "white")
 
 q <- seq(0, 3, 0.1)
 
@@ -1048,5 +973,5 @@ legend("bottom",
        text.width = 0.15,
        inset = c(0, 0.005))  # Better positioned legend
 
-dev.off()
+# dev.off()
 ```

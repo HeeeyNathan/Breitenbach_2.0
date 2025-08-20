@@ -5,18 +5,19 @@ editor: visual
 date: "`r Sys.Date()`"
 format:
   html:
-    code-overflow: scroll
     number-sections: true
+    code-overflow: scroll
     colorlinks: true
+    warning: false
+    message: false
+    code-fold: true
+    fig-format: png
 ---
 
 # Load necessary packages
 
 ```{r}
 #| label: Load packges
-#| warning: false
-#| message: false
-#| code-fold: true
 
 library(tidyverse)
 library(patchwork)
@@ -43,10 +44,6 @@ source("HighstatLibV15.R")
 
 ```{r}
 #| label: Define plotting parametres
-#| code-fold: true
-#| include: false
-#| output: false
-#| echo: false
 
 My_theme <- theme(panel.background = element_blank(),
                   panel.border = element_rect(fill = NA, linewidth = 1.25),
@@ -61,9 +58,6 @@ My_theme <- theme(panel.background = element_blank(),
 
 ```{r}
 #| label: Load data
-#| warning: false
-#| message: false
-#| code-fold: true
 
 diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>     # read in excel spreadsheet
   as_tibble() |>                                                           # Make tibble table
@@ -98,9 +92,6 @@ diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>     #
 
 ```{r}
 #| label: Initial data wrangling
-#| warning: false
-#| message: false
-#| code-fold: true
 
 diptera_clean <- diptera |>
   group_by(trap,
@@ -153,10 +144,6 @@ diptera_wide_red <- diptera_wide |>
 
 ```{r}
 #| label: Calculating Chao's indices
-#| code-fold: true
-#| warning: false
-#| message: false
-#| output: false
 
 chaoA       <- ChaoSpecies(diptera_wide$A ,"abundance", k = 2, conf = 0.95)        # trap A
 chaoB       <- ChaoSpecies(diptera_wide$B ,"abundance", k = 2, conf = 0.95)        # trap B
@@ -243,9 +230,6 @@ saveRDS(all_traps_data, "Outputs/ChoasDiversityProfilesDiptera.rds")
 
 ```{r}
 #| label: Load precalculated diversity profiles
-#| warning: false
-#| message: false
-#| code-fold: true
 
 Diversity_profiles <- readRDS("Outputs/ChoasDiversityProfilesDiptera.rds")
 ```
@@ -254,12 +238,9 @@ Diversity_profiles <- readRDS("Outputs/ChoasDiversityProfilesDiptera.rds")
 
 ```{r}
 #| label: Plotting diversity profiles
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+
 
 # Define custom colours
 custom_colours <- c("Chao-Jost-2015" = "#d95f02", "Empirical" = "#1b9e77")
@@ -349,6 +330,8 @@ ggsave("Plots/Diptera/Diversity_profiles_diptera.png", width = 10, height = 7, d
 ## Summary statistics
 
 ```{r}
+#| label: displaying summary statistics
+
 diptera_long |> 
   filter(trap %in% c("A", "B", "C", "E", "G", "I", "III")) |> 
   group_by(trap) |>
@@ -360,9 +343,6 @@ diptera_long |>
 
 ```{r}
 #| label: Calculating community indices
-#| warning: false
-#| message: false
-#| code-fold: true
 
 diptera_long <- diptera_long |> 
   filter(trap %in% c("A", "B", "C", "E", "G", "I", "III")) |>
@@ -467,7 +447,6 @@ TD <- TD |>
 
 ```{r}
 #| label: Check if data standardization worked
-#| include: false
 
 TD <- TD |> 
   mutate(
@@ -487,12 +466,8 @@ TD <- TD |>
 
 ```{r}
 #| label: Plotting turnover by year
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 ggplot(TD |> 
          group_by(trap) |> 
@@ -523,12 +498,8 @@ ggplot(TD |>
 
 ```{r}
 #| label: Plotting overall turnover
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 p <- ggplot(TD, aes(x = Turnover)) + 
   geom_density(fill = "gray50", alpha = 0.5) +  
@@ -554,12 +525,8 @@ p
 
 ```{r}
 #| label: Plotting turnover by trap
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 ggplot(TD, aes(x = Turnover, fill = trap)) + 
   geom_density(alpha = 0.3, colour = NA) +
@@ -585,12 +552,8 @@ ggplot(TD, aes(x = Turnover, fill = trap)) +
 
 ```{r}
 #| label: Plotting abundance by year
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 ggplot(TD |> 
          group_by(trap) |> 
@@ -619,12 +582,8 @@ ggplot(TD |>
 
 ```{r}
 #| label: Plotting species richness by year
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 ggplot(TD |> 
          group_by(trap) |> 
@@ -653,12 +612,8 @@ ggplot(TD |>
 
 ```{r}
 #| label: Plotting rarefied species richness by year
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 ggplot(TD |> 
          group_by(trap) |> 
@@ -706,9 +661,6 @@ write_rds(diptera_cum.rare, "Outputs/rarefaction_diptera.rds")             # sav
 
 ```{r}
 #| label: Loading precalculated rarefaction curves
-#| warning: false
-#| message: false
-#| code-fold: true
 
 diptera_cum.rare <- readRDS("Outputs/rarefaction_diptera.rds")               # load saved output
 ```
@@ -718,13 +670,9 @@ diptera_cum.rare <- readRDS("Outputs/rarefaction_diptera.rds")               # l
 ### All accumulation curves in one plot
 
 ```{r}
-#| label: Plotting all accumulation curves in the same plot
-#| code-fold: true
-#| warning: false
-#| message: false
+#| label: Plotting all accumulation curves in the same plot - test
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 options(scipen = 999)                                               # Increase penalty to avoid scientific notation
 p <- ggiNEXT(diptera_cum.rare, type = 1, color.var = "Assemblage")
@@ -735,12 +683,8 @@ p
 
 ```{r}
 #| label: Plotting all accumulation curves in the same plot
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 # Calculate maximum number of individuals
 Max_diptera_individuals <- sum(diptera_wide_red$Overall, na.rm = T)
@@ -817,12 +761,8 @@ ggsave("Plots/Diptera/Rarefaction_diptera.png", p, width = 7, height = 7, dpi = 
 
 ```{r}
 #| label: Plotting all accumulation curves in seperate plots
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 16
-#| fig-format: svg
 
 options(scipen = 999)                                               # Increase penalty to avoid scientific notation
 p1 <- ggiNEXT(diptera_cum.rare, facet.var = "Assemblage", grey = T)
@@ -840,7 +780,6 @@ p1
 
 ```{r}
 #| label: Missing values
-#| code-fold: true
 
 TD |> 
   group_by(trap) |> 
@@ -856,12 +795,8 @@ There are NA values, including some \~6% in turnover because the first year is a
 
 ```{r}
 #| label: Temporal replication (distribution)
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 trap_periods <- TD |> 
   group_by(trap) |> 
@@ -900,12 +835,8 @@ TD_sum |>
 
 ```{r}
 #| label: Outliers
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 MyVar <- c("SppRich", "Abund", "Turnover", "year")
 Mydotplot(TD[, MyVar])
@@ -917,12 +848,8 @@ Mydotplot(TD[, MyVar])
 
 ```{r}
 #| label: Relationship between abundance and year
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 p1 <- TD |>
   ggplot(aes(y = Abund, x = year)) +
@@ -943,12 +870,8 @@ p1
 
 ```{r}
 #| label: Relationship between abundance and year by trap
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 p1 + facet_wrap(~trap)
 ```
@@ -957,12 +880,8 @@ p1 + facet_wrap(~trap)
 
 ```{r}
 #| label: Relationship between species richness and year
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 p1 <- TD |>
   ggplot(aes(y = SppRich, x = year)) +
@@ -983,12 +902,8 @@ p1
 
 ```{r}
 #| label: Relationship between species richness and year by trap
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 p1 + facet_wrap(~trap)
 ```
@@ -997,12 +912,8 @@ p1 + facet_wrap(~trap)
 
 ```{r}
 #| label: Relationship between turnover and year
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 p1 <- TD |>
   ggplot(aes(y = Turnover, x = year)) +
@@ -1023,12 +934,8 @@ p1
 
 ```{r}
 #| label: Relationship between turnover and year by trap
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
 
 p1 + facet_wrap(~trap)
 ```
@@ -1037,12 +944,8 @@ p1 + facet_wrap(~trap)
 
 ```{r}
 #| label: Normality
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 16
-#| fig-format: svg
 
 # First save the plots
 p1 <- TD |> 
@@ -1083,7 +986,7 @@ gridExtra::grid.arrange(p1, p2, p3, ncol = 3)
 
 ```{r}
 #| label: Zero inflation
-#| code-fold: true
+
 # How many zeros do we have?
 TD |> summarise(percentage_zero = sum(Abund == 0) / n() * 100)
 # Nice!!!
@@ -1093,10 +996,6 @@ TD |> summarise(percentage_zero = sum(Abund == 0) / n() * 100)
 
 ```{r}
 #| label: Data standardization
-#| code-fold: true
-#| include: false
-#| output: false
-#| echo: false
 
 unique_years <- sort(unique(TD$year))
 TD <- TD |> 
@@ -1113,8 +1012,6 @@ saveRDS(TD, "Outputs/Diptera_TD.rds")
 
 ```{r}
 #| label: Standardization check
-#| code-fold: true
-#| include: false
 
 # Compute mean and standard deviation of TD$year
 year_mean <- mean(TD$year)
@@ -1140,12 +1037,8 @@ plot(TD$year, TD$year.std)
 
 ```{r}
 #| label: Check data distributions
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 # Check distribution of EPT abundance
 hist(TD$Abund, main = "Distribution of Diptera Abundance", breaks = 30, col = "steelblue")
@@ -1157,9 +1050,6 @@ hist(TD$Turnover, main = "Distribution of Diptera Turnover", breaks = 30, col = 
 
 ```{r}
 #| label: Filter dataset for overall models
-#| code-fold: true
-#| warning: false
-#| message: false
 
 TD_red <- TD |> 
   filter(year >= 1974 & year <= 1996)
@@ -1170,13 +1060,9 @@ TD_red <- TD |>
 ## Check non-linearity of abundance
 
 ```{r}
-#| label: Check non-linearity
-#| code-fold: true
-#| warning: false
-#| message: false
+#| label: Check non-linearity in abundance
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 library(mgcv)
 mod_gam <- gam(Abund ~ s(year), 
@@ -1188,7 +1074,6 @@ plot(mod_gam)
 
 ```{r}
 #| label: Fitting models for abundance
-#| code-fold: true
 
 # Fit overall model with trap as a random effect
 mod_overall <- glmmTMB(Abund ~ year.std, 
@@ -1231,12 +1116,8 @@ names(trap_models) <- levels(TD$ftrap)
 
 ```{r}
 #| label: Abundance overall model validation
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 # Simulated residual diagnostics
 simulation_output <- simulateResiduals(mod_overall4)
@@ -1254,15 +1135,8 @@ plotResiduals(simulation_output, form = TD_red$ftrap)  # Some trouble.
 
 ```{r}
 #| label: Abundance trap specific model validations
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
-#| include: false
-#| output: false
-#| echo: false
 
 # Validate individual trap models
 validation_results <- lapply(trap_models, function(model) {
@@ -1279,10 +1153,6 @@ par(mfrow = c(1, 1))
 
 ```{r}
 #| label: Abundance model outputs
-#| code-fold: true
-#| warning: false
-#| message: false
-
 
 # Table 1: Overall Model
 tab_model(
@@ -1323,8 +1193,6 @@ tab_model(
 
 ```{r}
 #| label: Make abundance model predictions
-#| code-fold: true
-#| include: true
 
 # Get min/max year per trap
 trap_ranges <- TD |> 
@@ -1379,13 +1247,8 @@ MyData_overall <- MyData_overall |>
 
 ```{r}
 #| label: Plot abundance models with original, unstandardized variables
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
-#| include: false
 
 # Define color and shape palette for traps
 trap_colours <- hue_pal()(length(unique(TD$ftrap)))
@@ -1438,12 +1301,8 @@ ggplot() +
 
 ```{r}
 #| label: Plot abundance models with back transformed variables
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 # Backtransform year.std to original year scale
 TD_mean_year <- mean(TD$year)
@@ -1533,13 +1392,9 @@ ggsave("Plots/Diptera/Diptera_abundance_model.png", plot = dip_abund_plot, width
 ```
 
 ```{r}
-#| label: Plot abundance models with back transformed variables
-#| code-fold: true
-#| warning: false
-#| message: false
+#| label: Plot abundance (in thousands) models with back transformed variables
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 # Plot: Individual Trap Trends & Overall Trend with Confidence Intervals (Scaled)
 dip_abund_plot <- ggplot() +
@@ -1617,12 +1472,8 @@ ggsave("Plots/Diptera/Diptera_abundance_model_thousand.png", plot = dip_abund_pl
 
 ```{r}
 #| label: Compare abundance model outputs with standard ggplot2 outputs
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 TD |>
   ggplot(aes(y = Abund, x = year, colour = ftrap, fill = ftrap)) +
@@ -1665,16 +1516,12 @@ TD_red |>
 
 # Species Richness Models
 
-## Check non-linearity of abundance
+## Check non-linearity of richness
 
 ```{r}
-#| label: Check non-linearity
-#| code-fold: true
-#| warning: false
-#| message: false
+#| label: Check non-linearity in richness
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 mod_gam <- gam(SppRich ~ s(year.std), 
                data = TD_red)
@@ -1685,10 +1532,8 @@ plot(mod_gam)
 
 ```{r}
 #| label: Choose best distribution to use for species richness models
-#| code-fold: true
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 # Poisson Model (may be too restrictive)
 mod_poisson <- glmmTMB(SppRich ~ year.std, 
@@ -1713,7 +1558,6 @@ AIC(mod_poisson, mod_gamma, mod_gaussian, mod_gam)
 
 ```{r}
 #| label: Fitting models for species richness
-#| code-fold: true
 
 # Base model (no random effects)
 spp_mod_overall <- glmmTMB(SppRich ~ year.std, 
@@ -1760,12 +1604,8 @@ names(spp_trap_models) <- levels(TD$ftrap)
 
 ```{r}
 #| label: Species richness overall model validation
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 # Simulated residual diagnostics
 simulation_output <- simulateResiduals(spp_mod_overall4)
@@ -1783,15 +1623,8 @@ plotResiduals(simulation_output, form = TD_red$ftrap)  # Some trouble.
 
 ```{r}
 #| label: Species richness trap specific model validations
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
-#| include: false
-#| output: false
-#| echo: false
 
 # Validate individual trap models
 validation_results <- lapply(spp_trap_models, function(model) {
@@ -1810,12 +1643,8 @@ par(mfrow = c(1, 1))
 
 ```{r}
 #| label: Species richness model outputs
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 # Define backtransformation function
 # backtransform <- function(x) {
@@ -1864,8 +1693,6 @@ tab_model(
 
 ```{r}
 #| label: Make species richness model predictions
-#| code-fold: true
-#| include: true
 
 # Get min/max year per trap
 trap_ranges <- TD |> 
@@ -1925,13 +1752,8 @@ MyData_overall <- MyData_overall |>
 
 ```{r}
 #| label: Plot species richness models with original, unstandardized variables
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
-#| include: false
 
 # Ensure ftrap is a factor
 MyData_traps$ftrap <- factor(MyData_traps$ftrap, levels = levels(TD$ftrap))
@@ -1987,12 +1809,8 @@ ggplot() +
 
 ```{r}
 #| label: Plot species richness models with back transformed variables
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 # Backtransform year.std to original year scale
 TD_mean_year <- mean(TD$year)
@@ -2069,12 +1887,8 @@ ggsave("Plots/Diptera/Diptera_sppRich_model.png", plot = dip_spprich_plot, width
 
 ```{r}
 #| label: Compare species richness model outputs with standard ggplot2 outputs
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 TD |>
   ggplot(aes(y = SppRich, x = year, colour = ftrap, fill = ftrap)) +
@@ -2116,16 +1930,12 @@ TD_red |>
 
 # Turnover Models
 
-## Check non-linearity of abundance
+## Check non-linearity of turnover
 
 ```{r}
-#| label: Check non-linearity
-#| code-fold: true
-#| warning: false
-#| message: false
+#| label: Check non-linearity in turnover
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 # Remove NAs
 TD_turn <- TD |>
@@ -2144,9 +1954,6 @@ plot(mod_gam)
 
 ```{r}
 #| label: Choose best distribution to use for turnover models
-#| warning: false
-#| message: false
-#| code-fold: true
 
 # Poisson Model (may be too restrictive)
 mod_poisson <- glmmTMB(Turnover ~ year.std, 
@@ -2171,7 +1978,6 @@ AIC(mod_poisson, mod_gaussian_logit, mod_gaussian, mod_gam)
 
 ```{r}
 #| label: Fitting models for turnover
-#| code-fold: true
 
 # Base model (no random effects)
 turn_mod_overall <- glmmTMB(Turnover ~ year.std, 
@@ -2217,12 +2023,8 @@ names(turn_trap_models) <- levels(TD_turn$ftrap)
 
 ```{r}
 #| label: Turnover overall model validation
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 # Simulated residual diagnostics
 simulation_output <- simulateResiduals(turn_mod_overall4)
@@ -2240,15 +2042,8 @@ plotResiduals(simulation_output, form = TD_turn_red$ftrap)  # Some trouble.
 
 ```{r}
 #| label: Trunover trap specific model validations
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
-#| include: false
-#| output: false
-#| echo: false
 
 # Validate individual trap models
 validation_results <- lapply(turn_trap_models, function(model) {
@@ -2267,12 +2062,8 @@ par(mfrow = c(1, 1))
 
 ```{r}
 #| label: Trunover model outputs
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 # Define backtransformation function
 # backtransform <- function(x) {
@@ -2320,8 +2111,6 @@ tab_model(
 
 ```{r}
 #| label: Make turnover model predictions
-#| code-fold: true
-#| include: true
 
 # Get min/max year per trap
 trap_ranges <- TD_turn |> 
@@ -2382,13 +2171,8 @@ MyData_overall <- MyData_overall |>
 
 ```{r}
 #| label: Plot turnover models with original, unstandardized variables
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
-#| include: false
 
 # Ensure ftrap is a factor with correct levels
 MyData_traps$ftrap <- factor(MyData_traps$ftrap, levels = levels(TD$ftrap))
@@ -2449,11 +2233,8 @@ ggplot() +
 
 ```{r}
 #| label: Plot turnover models with back transformed variables
-#| code-fold: true
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
-#| warning: false
 
 # Ensure ftrap is a factor with correct levels
 MyData_traps$ftrap <- factor(MyData_traps$ftrap, levels = levels(TD$ftrap))
@@ -2528,12 +2309,8 @@ ggsave("Plots/Diptera/Diptera_turnover_model.png", plot = dip_turnover_plot, wid
 
 ```{r}
 #| label: Compare turnover model outputs with standard ggplot2 outputs
-#| code-fold: true
-#| warning: false
-#| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
 
 TD_turn |>
   ggplot(aes(y = Turnover, x = year, colour = ftrap, fill = ftrap)) +
