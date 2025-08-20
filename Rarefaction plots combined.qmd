@@ -1,5 +1,5 @@
 ---
-title: Breitenbach 2.0 - DIPTERA
+title: COMBINING RAREFACTION PLOTS
 author: Nathan Jay Baker & Viktor Baranov
 editor: visual
 date: "`r Sys.Date()`"
@@ -8,12 +8,6 @@ format:
     code-overflow: scroll
     number-sections: true
     colorlinks: true
-  # pdf:
-  #   code-overflow: wrap
-  #   pdf-engine: lualatex
-  #   toc: true
-  #   number-sections: true
-  #   colorlinks: true
 ---
 
 # Load necessary packages
@@ -300,5 +294,5 @@ combined_plot <- diptera_plot + ept_plot +
   )
 
 combined_plot
-ggsave("Plots/Rarefaction_dipt_ept.png", combined_plot, width = 12, height = 8, dpi = 300, bg = "white")
+ggsave("Plots/All plots for publication/Figure2.png", combined_plot, width = 12, height = 8, dpi = 450, bg = "white")
 ```

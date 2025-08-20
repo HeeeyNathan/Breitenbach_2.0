@@ -1,5 +1,5 @@
 ---
-title: Breitenbach 2.0 - EPT
+title: EPT STATS AND MODELS
 author: Nathan Jay Baker & Viktor Baranov
 editor: visual
 date: "`r Sys.Date()`"
@@ -8,12 +8,6 @@ format:
     code-overflow: scroll
     number-sections: true
     colorlinks: true
-  # pdf:
-  #   code-overflow: wrap
-  #   pdf-engine: lualatex
-  #   toc: true
-  #   number-sections: true
-  #   colorlinks: true
 ---
 
 # Load necessary packages
@@ -23,6 +17,7 @@ format:
 #| warning: false
 #| message: false
 #| code-fold: true
+#| code-overflow: wrap
 
 library(tidyverse)
 library(patchwork)
@@ -41,6 +36,7 @@ library(sjPlot)
 library(ggeffects)
 library(scales)
 library(splines)
+library(future.apply)
 source("HighstatLibV15.R")
 ```
 
@@ -49,9 +45,8 @@ source("HighstatLibV15.R")
 ```{r}
 #| label: Define plotting parametres
 #| code-fold: true
-#| include: false
+#| include: true
 #| output: false
-#| echo: false
 
 My_theme <- theme(panel.background = element_blank(),
                   panel.border = element_rect(fill = NA, linewidth = 1.25),
@@ -76,7 +71,7 @@ ept <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>     # rea
   rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>         # Change column names
   filter(!str_detect(original_name, "Summe")) |>                           # delete rows containing "summe"
   filter(order %in% c("Ephemeroptera", "Plecoptera", "Trichoptera")) |>    # Keeps only EPT taxa
-  dplyr::select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>               # Removes empty (0) columns
+  dplyr::select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>               # Removes empty (0) columns (i.e, 2006)
   mutate(trap_new = case_when(                                             # Homogenize trap names
     trap %in% c('Haus 0') ~ 'O',
     trap %in% c('Haus A', 'A/I') ~ 'A',
@@ -90,7 +85,6 @@ ept <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>     # rea
     trap %in% c('Haus G', 'G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
     trap %in% c('Quelle') ~ 'Source',
     TRUE ~ trap)) |>
-  filter(!str_detect(trap_new, "D")) |>                                    # delete trap D (only sampled 1983)
   dplyr::select(-c(taxa_id:trap)) |>                                       # Remove unnecessary columns
   mutate(sp_name  = validated_name,                                        # Change column names
          trap     = trap_new,                                              # Change column names
@@ -128,10 +122,24 @@ ept_long <- ept_clean |>
 
 ept_agg <- ept_long |>
   group_by(sp_name,
-           trap) |>                                                        # Group by sp_name and trap
+           trap,
+           family) |>                                                        # Group by sp_name and trap
   summarise(abundance = sum(abundance),
             .groups = "drop") |>                                           # Summarise with the sum of "abundance"
-  arrange(trap)                                                            # Sort data
+  arrange(trap) |>                                                         # Sort data
+  filter(!trap %in% c("F", "Source", "D", "O")) |>                              # Remove unwanted traps
+  mutate(trap = factor(trap, levels = c("A", "B", "C", "E", "G", "I", "III")))
+
+# total abundance of ept
+ept_agg |>
+  select(where(is.numeric)) |>
+  unlist() |>
+  sum(na.rm = TRUE)
+
+# total species richness of diptera
+ept_agg |> 
+  summarise(unique_species = n_distinct(sp_name)) |> 
+  pull(unique_species)
 
 ept_wide <- ept_agg |>
   pivot_wider(names_from  = trap,
@@ -140,6 +148,13 @@ ept_wide <- ept_agg |>
               values_fn   = sum) |>
   mutate(Overall = rowSums(across(where(is.numeric)))) |>
   arrange(sp_name)                                                         # Sort data
+
+write_xlsx(ept_wide, "Taxonomy information/EPT_taxa_for_analysis.xlsx")
+
+ept_wide_red <- ept_wide |>
+  column_to_rownames(var = "sp_name") |>
+  data.frame() |> 
+  dplyr::select(-family)
 ```
 
 # Calculating indices
@@ -157,19 +172,23 @@ chaoA_ept       <- ChaoSpecies(ept_wide$A ,"abundance", k = 2, conf = 0.95)     
 chaoB_ept       <- ChaoSpecies(ept_wide$B ,"abundance", k = 2, conf = 0.95)       # ept trap B
 chaoC_ept       <- ChaoSpecies(ept_wide$C ,"abundance", k = 2, conf = 0.95)       # ept trap C
 chaoE_ept       <- ChaoSpecies(ept_wide$E ,"abundance", k = 2, conf = 0.95)       # ept trap E
-chaoF_ept       <- ChaoSpecies(ept_wide$F ,"abundance", k = 2, conf = 0.95)       # ept trap F
 chaoG_ept       <- ChaoSpecies(ept_wide$G ,"abundance", k = 2, conf = 0.95)       # ept trap G
 chaoI_ept       <- ChaoSpecies(ept_wide$I ,"abundance", k = 2, conf = 0.95)       # ept trap I
 chaoIII_ept     <- ChaoSpecies(ept_wide$III ,"abundance", k = 2, conf = 0.95)     # ept trap III
-chaoO_ept       <- ChaoSpecies(ept_wide$O ,"abundance", k = 2, conf = 0.95)       # ept trap O
 chaoOverall_ept <- ChaoSpecies(ept_wide$Overall ,"abundance", k = 2, conf = 0.95) # Overall
 ```
 
 ## Extracting diversity profiles
 
-This code chunk takes a long time to run, so I include it here as non-executable code. Below this chunk is an rds file with the outputs.
+This code chunk takes a long time to run, so it is included here as non-executable code. Below this chunk is an rds file with the outputs.
 
 ``` r
+# Allow parallel processing
+plan(multisession, workers = 7)  # Use 10 of your 20 available threads
+
+# Monitor progress and increase memory limits
+options(future.globals.maxSize = 2000 * 1024^2)  # 2GB limit for data transfer
+
 attach(ept_wide) # makes each column a separate, accessible vector
 
 # Claculating diversity profiles
@@ -177,16 +196,14 @@ Trap_A_diversity   <- Diversity(`A`, "abundance", q = c(0, 1, 2))
 Trap_B_diversity   <- Diversity(`B`, "abundance", q = c(0, 1, 2))
 Trap_C_diversity   <- Diversity(`C`, "abundance", q = c(0, 1, 2))
 Trap_E_diversity   <- Diversity(`E`, "abundance", q = c(0, 1, 2))
-Trap_F_diversity   <- Diversity(`F`, "abundance", q = c(0, 1, 2))
 Trap_G_diversity   <- Diversity(`G`, "abundance", q = c(0, 1, 2))
 Trap_I_diversity   <- Diversity(`I`, "abundance", q = c(0, 1, 2))
 Trap_III_diversity <- Diversity(`III`, "abundance", q = c(0, 1, 2))
-Trap_O_diversity   <- Diversity(`O`, "abundance", q = c(0, 1, 2))
 Trap_Overall_diversity  <- Diversity(`Overall`, "abundance", q = c(0, 1, 2))
 
 # List of trap names
 trap_names <- ept_wide |>
-  select(-sp_name) |>
+  select(-sp_name, -family) |>
   colnames()
 
 # Function to process each trap's diversity data
@@ -225,10 +242,15 @@ process_trap <- function(trap_name) {
 
 # Apply the function to all traps and combine results into a single dataframe
 all_traps_data <- bind_rows(lapply(trap_names, process_trap)) |>
-      arrange(Source)
+                  arrange(Source)
+
+# Clean up parallel processing
+plan(sequential)  # Return to sequential processing
 
 saveRDS(all_traps_data, "Outputs/ChoasDiversityProfilesEPT.rds")
 ```
+
+## Load diversity profiles
 
 ```{r}
 #| label: Load precalculated diversity profiles
@@ -248,7 +270,7 @@ Diversity_profiles <- readRDS("Outputs/ChoasDiversityProfilesEPT.rds")
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 # Define custom colours
 custom_colours <- c("Chao-Jost-2015" = "#d95f02", "Empirical" = "#1b9e77")
@@ -352,6 +374,10 @@ ept_long |>
 #| warning: false
 #| message: false
 #| code-fold: true
+
+ept_long <- ept_long |> 
+  filter(trap %in% c("A", "B", "C", "E", "G", "I", "III")) |>
+  mutate(trap = factor(trap, levels = c("A", "B", "C", "E", "G", "I", "III")))
 
 ept_long$ro.ab <- round(ept_long$abundance, digits = 0) # Round abundance to whole numbers for rarefaction
 TD <- NULL                                              # Initialize empty data frame to store results
@@ -488,7 +514,7 @@ My_theme <- theme(panel.background = element_blank(),
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 ggplot(TD |> 
          group_by(trap) |> 
@@ -524,7 +550,7 @@ ggplot(TD |>
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 p <- ggplot(TD, aes(x = Turnover)) + 
   geom_density(fill = "gray50", alpha = 0.5) +  
@@ -555,7 +581,7 @@ p
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 ggplot(TD, aes(x = Turnover, fill = trap)) + 
   geom_density(alpha = 0.3, colour = NA) +
@@ -587,7 +613,7 @@ ggplot(TD, aes(x = Turnover, fill = trap)) +
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 ggplot(TD |> 
          group_by(trap) |> 
@@ -621,7 +647,7 @@ ggplot(TD |>
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 ggplot(TD |> 
          group_by(trap) |> 
@@ -655,7 +681,7 @@ ggplot(TD |>
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 ggplot(TD |> 
          group_by(trap) |> 
@@ -684,17 +710,22 @@ ggplot(TD |>
 
 ## Calculation of rarefaction curves
 
-This code chunk takes a long time to run, so I include it here as non-executable code. Below this chunk is an rds file with the outputs.
+This code chunk takes a long time to run, so it is included here as non-executable code. Below this chunk is an rds file with the outputs.
 
 ``` r
-ept_wide_red <- ept_wide |>
-  select(-O, -F) |>
-  column_to_rownames(var = "sp_name") |>
-  data.frame() |>
-  print()                                                          # remove traps with lower quality data: Trap D, F, & Quelle
+plan(multisession, workers = 15)  # Use 10 of your 20 available threads
+
+# Monitor progress and increase memory limits
+options(future.globals.maxSize = 3000 * 1024^3)  # 2GB limit for data transfer
+
 ept_cum.rare = iNEXT(ept_wide_red, q = 0, datatype = "abundance")  # calculate accumulation curves
+
+plan(sequential)  # Return to sequential processing
+
 write_rds(ept_cum.rare, "Outputs/rarefaction_ept.rds")             # save output for quicker loading next time
 ```
+
+## Load rarefaction data
 
 ```{r}
 #| label: Loading precalculated rarefaction curves
@@ -721,13 +752,13 @@ ept_cum.rare$AsyEst
 ### All accumulation curves in one plot
 
 ```{r}
-#| label: Plotting all accumulation curves in the same plot
+#| label: Plotting all accumulation curves in the same plot - test
 #| code-fold: true
 #| warning: false
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 options(scipen = 999)                                               # Increase penalty to avoid scientific notation
 ept_p <- ggiNEXT(ept_cum.rare, type = 1, color.var = "Assemblage")
@@ -744,7 +775,9 @@ ept_p
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
+
+Max_diptera_individuals <- 359482
 
 # Create the base plot with ggiNEXT
 p <- ggiNEXT(ept_cum.rare, type = 1, color.var = "Assemblage")
@@ -752,6 +785,7 @@ p <- ggiNEXT(ept_cum.rare, type = 1, color.var = "Assemblage")
 # Apply aesthetic enhancements to match your first plot
 p <- p + 
   # Update theme elements
+  geom_vline(xintercept = Max_diptera_individuals, color = "red", linetype = "dashed", linewidth = 0.8) +
   theme_minimal() +
   theme(
     text = element_text(family = "Arial"),
@@ -824,7 +858,7 @@ ggsave("Plots/EPT/Rarefaction_ept.png", p, width = 7, height = 7, dpi = 300, bg 
 #| message: false
 #| fig-height: 12
 #| fig-width: 16
-#| fig-format: svg
+#| fig-format: png
 
 options(scipen = 999)                                               # Increase penalty to avoid scientific notation
 ept_p1 <- ggiNEXT(ept_cum.rare, facet.var = "Assemblage", grey = T)
@@ -863,7 +897,7 @@ There are NA values, including some \~6% in turnover because the first year is a
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 trap_periods <- TD |> 
   group_by(trap) |> 
@@ -918,7 +952,7 @@ trap_periods <- TD |>
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 MyVar <- c("SppRich", "Abund", "Turnover", "year")
 Mydotplot(TD[, MyVar])
@@ -935,7 +969,7 @@ Mydotplot(TD[, MyVar])
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 p1 <- TD |>
   ggplot(aes(y = Abund, x = year)) +
@@ -961,7 +995,7 @@ p1
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 p1 + facet_wrap(~trap)
 ```
@@ -975,7 +1009,7 @@ p1 + facet_wrap(~trap)
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 p1 <- TD |>
   ggplot(aes(y = SppRich, x = year)) +
@@ -1001,7 +1035,7 @@ p1
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 p1 + facet_wrap(~trap)
 ```
@@ -1015,7 +1049,7 @@ p1 + facet_wrap(~trap)
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 p1 <- TD |>
   ggplot(aes(y = Turnover, x = year)) +
@@ -1041,7 +1075,7 @@ p1
 #| message: false
 #| fig-height: 12
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 p1 + facet_wrap(~trap)
 ```
@@ -1055,7 +1089,7 @@ p1 + facet_wrap(~trap)
 #| message: false
 #| fig-height: 8
 #| fig-width: 16
-#| fig-format: svg
+#| fig-format: png
 
 # First save the plots
 p1 <- TD |> 
@@ -1154,7 +1188,7 @@ plot(TD$year, TD$year.std)
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 # Check distribution of EPT abundance
 hist(TD$Abund, main = "Distribution of EPT Abundance", breaks = 30, col = "steelblue")
@@ -1235,7 +1269,7 @@ names(trap_models) <- levels(TD$ftrap)
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 # Simulated residual diagnostics
 simulation_output <- simulateResiduals(mod_overall4)
@@ -1258,7 +1292,7 @@ plotResiduals(simulation_output, form = TD_red$ftrap)  # Some trouble.
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 #| include: false
 #| output: false
 #| echo: false
@@ -1283,7 +1317,7 @@ par(mfrow = c(1, 1))
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 # Table 1: Overall Model
 tab_model(
@@ -1385,7 +1419,7 @@ MyData_overall <- MyData_overall |>
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 #| include: false
 
 # Define color and shape palette for traps
@@ -1445,7 +1479,7 @@ ggplot() +
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 # Backtransform year.std to original year scale
 TD_mean_year <- mean(TD$year)
@@ -1526,13 +1560,13 @@ ggsave("Plots/EPT/EPT_abundance_model.png", plot = ept_abundance_plot, width = 8
 ```
 
 ```{r}
-#| label: Plot abundance models with back transformed variables
+#| label: Plot abundance models (in thousands) with back transformed variables
 #| code-fold: true
 #| warning: false
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 # Plot: Individual Trap Trends & Overall Trend with Confidence Intervals (Scaled)
 ept_abundance_plot <- ggplot() +
@@ -1615,7 +1649,7 @@ ggsave("Plots/EPT/EPT_abundance_model_thousand.png", plot = ept_abundance_plot, 
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 TD |>
   ggplot(aes(y = Abund, x = year, colour = ftrap, fill = ftrap)) +
@@ -1744,7 +1778,7 @@ names(spp_trap_models) <- levels(TD$ftrap)
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 # Simulated residual diagnostics
 simulation_output <- simulateResiduals(spp_mod_overall4)
@@ -1767,7 +1801,7 @@ plotResiduals(simulation_output, form = TD_red$ftrap)  # Some trouble.
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 #| include: false
 #| output: false
 #| echo: false
@@ -1794,7 +1828,7 @@ par(mfrow = c(1, 1))
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 # Define backtransformation function
 backtransform <- function(x) {
@@ -1909,7 +1943,7 @@ MyData_overall <- MyData_overall |>
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 #| include: false
 
 # Ensure ftrap is a factor
@@ -1971,7 +2005,7 @@ ggplot() +
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 # Backtransform year.std to original year scale
 TD_mean_year <- mean(TD$year)
@@ -2052,7 +2086,7 @@ ggsave("Plots/EPT/EPT_sppRich_model.png", plot = ept_spprich_plot, width = 8, he
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 TD |>
   ggplot(aes(y = SppRich, x = year, colour = ftrap, fill = ftrap)) +
@@ -2190,7 +2224,7 @@ names(turn_trap_models) <- levels(TD_turn$ftrap)
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 # Simulated residual diagnostics
 simulation_output <- simulateResiduals(turn_mod_overall4)
@@ -2213,7 +2247,7 @@ plotResiduals(simulation_output, form = TD_turn_red$ftrap)  # Some trouble.
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 #| include: false
 #| output: false
 #| echo: false
@@ -2240,7 +2274,7 @@ par(mfrow = c(1, 1))
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 # Define backtransformation function
 # backtransform <- function(x) {
@@ -2355,7 +2389,7 @@ MyData_overall <- MyData_overall |>
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 #| include: false
 
 # Ensure ftrap is a factor with correct levels
@@ -2420,7 +2454,7 @@ ggplot() +
 #| code-fold: true
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 #| warning: false
 
 # Ensure ftrap is a factor with correct levels
@@ -2501,7 +2535,7 @@ ggsave("Plots/EPT/EPT_turnover_model.png", plot = ept_turnover_plot, width = 8, 
 #| message: false
 #| fig-height: 8
 #| fig-width: 12
-#| fig-format: svg
+#| fig-format: png
 
 TD_turn |>
   ggplot(aes(y = Turnover, x = year, colour = ftrap, fill = ftrap)) +

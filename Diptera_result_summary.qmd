@@ -1,5 +1,5 @@
 ---
-title: Breitenbach 2.0 - DIPTERA
+title: DIPTERA STATS AND MODELS
 author: Nathan Jay Baker & Viktor Baranov
 editor: visual
 date: "`r Sys.Date()`"
@@ -8,12 +8,6 @@ format:
     code-overflow: scroll
     number-sections: true
     colorlinks: true
-  # pdf:
-  #   code-overflow: wrap
-  #   pdf-engine: lualatex
-  #   toc: true
-  #   number-sections: true
-  #   colorlinks: true
 ---
 
 # Load necessary packages
@@ -41,6 +35,7 @@ library(sjPlot)
 library(ggeffects)
 library(scales)
 library(splines)
+library(future.apply)
 source("HighstatLibV15.R")
 ```
 
@@ -77,20 +72,19 @@ diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>     #
   filter(!str_detect(original_name, "Summe")) |>                           # delete rows containing "summe"
   filter(order %in% "Diptera") |>    # Keeps only EPT taxa
   dplyr::select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>               # Removes empty (0) columns
-  mutate(trap_new = case_when(                                             # Homogenize trap names
+  mutate(trap_new = case_when(
+    trap %in% c('B', 'B-II-X', 'B/II', 'B / II', 'Haus B', 'Haus B/II') ~ 'B',
+    trap %in% c('III', 'Haus III') ~ 'III',
+    trap %in% c('C', 'C-IV', 'C/IV', 'C / IV', 'Haus C', 'Haus C-IV', 'Haus C/IV') ~ 'C',
+    trap %in% c('D', 'Haus D') ~ 'D',
+    trap %in% c('E', 'E-V', 'E/V', 'E / V', 'Haus E - V', 'Haus E/V') ~ 'E',
+    trap %in% c('F', 'F-VI', 'F/VI', 'F / VI', 'F-VII', 'Haus F - VI', 'Haus F/VI') ~ 'F',
+    trap %in% c('G', 'G-VII', 'G/VII', 'G/ VII', 'Haus G', 'Haus G/VII') ~ 'G',
+    trap %in% c('I', 'Haus I') ~ 'I',
+    trap %in% c('A', 'A/I', 'Haus A') ~ 'A',
     trap %in% c('Haus 0') ~ 'O',
-    trap %in% c('Haus A', 'A/I') ~ 'A',
-    trap %in% c('Haus I') ~ 'I',
-    trap %in% c('Haus B', 'B / II', 'B-II-X', 'B/II', 'Haus B/II') ~ 'B',
-    trap %in% c('Haus C-IV', 'C / IV', 'C-IV', 'C/IV', 'Haus C', 'Haus C/IV') ~ 'C',
-    trap %in% c('Haus III') ~ 'III',
-    trap %in% c('Haus D') ~ 'D',
-    trap %in% c('Haus E - V', 'E / V', 'E-V', 'E/V', 'Haus E/V') ~ 'E',
-    trap %in% c('Haus F - VI', 'F / VI', 'F-VI', 'F-VII', 'F/VI', 'Haus F/VI') ~ 'F',
-    trap %in% c('Haus G', 'G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
     trap %in% c('Quelle') ~ 'Source',
     TRUE ~ trap)) |>
-  filter(!str_detect(trap_new, "D")) |>                                    # delete trap D (only sampled 1983)
   dplyr::select(-c(taxa_id:trap)) |>                                       # Remove unnecessary columns
   mutate(sp_name  = validated_name,                                        # Change column names
          trap     = trap_new,                                              # Change column names
@@ -128,10 +122,13 @@ diptera_long <- diptera_clean |>
 
 diptera_agg <- diptera_long |>
   group_by(sp_name,
-           trap) |>                                                        # Group by sp_name and trap
+           trap, 
+           family) |>                                                      # Group by sp_name, family, and trap
   summarise(abundance = sum(abundance),
             .groups = "drop") |>                                           # Summarise with the sum of "abundance"
-  arrange(trap)                                                            # Sort data
+  arrange(trap) |>                                                         # Sort data
+  filter(!trap %in% c("F", "Source", "D")) |>                              # Remove unwanted traps
+  mutate(trap = factor(trap, levels = c("A", "B", "C", "E", "G", "I", "III")))
 
 diptera_wide <- diptera_agg |>
   pivot_wider(names_from  = trap,
@@ -140,6 +137,14 @@ diptera_wide <- diptera_agg |>
               values_fn   = sum) |>
   mutate(Overall = rowSums(across(where(is.numeric)))) |>
   arrange(sp_name)                                                         # Sort data
+
+
+write_xlsx(diptera_wide, "Taxonomy information/Diptera_taxa_for_analysis.xlsx")
+
+diptera_wide_red <- diptera_wide |>
+  column_to_rownames(var = "sp_name") |>
+  data.frame() |> 
+  dplyr::select(-family)
 ```
 
 # Calculating indices
@@ -153,24 +158,26 @@ diptera_wide <- diptera_agg |>
 #| message: false
 #| output: false
 
-
 chaoA       <- ChaoSpecies(diptera_wide$A ,"abundance", k = 2, conf = 0.95)        # trap A
 chaoB       <- ChaoSpecies(diptera_wide$B ,"abundance", k = 2, conf = 0.95)        # trap B
 chaoC       <- ChaoSpecies(diptera_wide$C ,"abundance", k = 2, conf = 0.95)        # trap C
 chaoE       <- ChaoSpecies(diptera_wide$E ,"abundance", k = 2, conf = 0.95)        # trap E
-chaoF       <- ChaoSpecies(diptera_wide$F ,"abundance", k = 2, conf = 0.95)        # trap F
 chaoG       <- ChaoSpecies(diptera_wide$G ,"abundance", k = 2, conf = 0.95)        # trap G
 chaoI       <- ChaoSpecies(diptera_wide$I ,"abundance", k = 2, conf = 0.95)        # trap I
 chaoIII     <- ChaoSpecies(diptera_wide$III ,"abundance", k = 2, conf = 0.95)      # trap III
-# chaoSource <- ChaoSpecies(diptera_wide$Source ,"abundance", k = 2, conf = 0.95)   # trap Source
 chaoOverall <- ChaoSpecies(diptera_wide$Overall ,"abundance", k = 2, conf = 0.95)      # Overall
 ```
 
 ## Extracting diversity profiles
 
-This code chunk takes a long time to run, so I include it here as non-executable code. Below this chunk is an rds file with the outputs.
+This code chunk takes a long time to run, so it is included here as non-executable code. Below this chunk is an rds file with the outputs.
 
 ``` r
+plan(multisession, workers = 10)  # Use 10 of your 20 available threads
+
+# Monitor progress and increase memory limits
+options(future.globals.maxSize = 2000 * 1024^2)  # 2GB limit for data transfer
+
 attach(diptera_wide) # makes each column a separate, accessible vector
 
 # Claculating diversity profiles
@@ -178,16 +185,14 @@ Trap_A_diversity        <- Diversity(`A`, "abundance", q = c(0, 1, 2))
 Trap_B_diversity        <- Diversity(`B`, "abundance", q = c(0, 1, 2))
 Trap_C_diversity        <- Diversity(`C`, "abundance", q = c(0, 1, 2))
 Trap_E_diversity        <- Diversity(`E`, "abundance", q = c(0, 1, 2))
-Trap_F_diversity        <- Diversity(`F`, "abundance", q = c(0, 1, 2))
 Trap_G_diversity        <- Diversity(`G`, "abundance", q = c(0, 1, 2))
 Trap_I_diversity        <- Diversity(`I`, "abundance", q = c(0, 1, 2))
 Trap_III_diversity      <- Diversity(`III`, "abundance", q = c(0, 1, 2))
-Trap_Source_diversity   <- Diversity(`Source`, "abundance", q = c(0, 1, 2))
 Trap_Overall_diversity  <- Diversity(`Overall`, "abundance", q = c(0, 1, 2))
 
 # List of trap names
 trap_names <- diptera_wide |>
-  select(-sp_name) |>
+  select(-sp_name, -family) |>
   colnames()
 
 # Function to process each trap's diversity data
@@ -226,10 +231,15 @@ process_trap <- function(trap_name) {
 
 # Apply the function to all traps and combine results into a single dataframe
 all_traps_data <- bind_rows(lapply(trap_names, process_trap)) |>
-      arrange(Source)
+                  arrange(Source)
+
+# Clean up parallel processing
+plan(sequential)  # Return to sequential processing
 
 saveRDS(all_traps_data, "Outputs/ChoasDiversityProfilesDiptera.rds")
 ```
+
+## Load diversity profiles
 
 ```{r}
 #| label: Load precalculated diversity profiles
@@ -344,7 +354,6 @@ diptera_long |>
   group_by(trap) |>
   summarize(unique_species = n_distinct(sp_name), 
             total_abundance = sum(abundance))
-  
 ```
 
 ## Standard community indices + turnover
@@ -354,6 +363,10 @@ diptera_long |>
 #| warning: false
 #| message: false
 #| code-fold: true
+
+diptera_long <- diptera_long |> 
+  filter(trap %in% c("A", "B", "C", "E", "G", "I", "III")) |>
+  mutate(trap = factor(trap, levels = c("A", "B", "C", "E", "G", "I", "III")))
 
 diptera_long$ro.ab <- round(diptera_long$abundance, digits = 0) # Round abundance to whole numbers for rarefaction
 TD <- NULL                                                      # Initialize empty data frame to store results
@@ -566,7 +579,6 @@ ggplot(TD, aes(x = Turnover, fill = trap)) +
     legend.text = element_text(size = 12),
     plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
   )
-
 ```
 
 ### Abundance by trap by year
@@ -600,7 +612,7 @@ ggplot(TD |>
        caption = "Abundance through time by trap") + 
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm")) 
+        axis.ticks.length = unit(0.25, "cm"))
 ```
 
 ### Species richness by trap by year
@@ -634,7 +646,7 @@ ggplot(TD |>
        caption = "Species richness through time by trap") + 
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm")) 
+        axis.ticks.length = unit(0.25, "cm"))
 ```
 
 ### (Individual-based) rarefied species richness by trap by year
@@ -668,7 +680,7 @@ ggplot(TD |>
        caption = "Rarefied species richness through time by trap") + 
   My_theme +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.ticks.length = unit(0.25, "cm")) 
+        axis.ticks.length = unit(0.25, "cm"))
 ```
 
 # Rarefaction accumulation curves
@@ -678,14 +690,19 @@ ggplot(TD |>
 This code chunk takes a long time to run, so I include it here as non-executable code. Below this chunk is an rds file with the outputs.
 
 ``` r
-diptera_wide_red <- diptera_wide |>
-  select(-F, -Source) |>
-  column_to_rownames(var = "sp_name") |>
-  data.frame() |>
-  print()                                                                  # remove traps with lower quality data: Trap D, F, & Quelle
+plan(multisession, workers = 15)  # Use 10 of your 20 available threads
+
+# Monitor progress and increase memory limits
+options(future.globals.maxSize = 3000 * 1024^3)  # 2GB limit for data transfer
+
 diptera_cum.rare = iNEXT(diptera_wide_red, q = 0, datatype = "abundance")  # calculate accumulation curves
+
+plan(sequential)  # Return to sequential processing
+
 write_rds(diptera_cum.rare, "Outputs/rarefaction_diptera.rds")             # save output for quicker loading next time
 ```
+
+## Load rarefaction data
 
 ```{r}
 #| label: Loading precalculated rarefaction curves
@@ -694,17 +711,6 @@ write_rds(diptera_cum.rare, "Outputs/rarefaction_diptera.rds")             # sav
 #| code-fold: true
 
 diptera_cum.rare <- readRDS("Outputs/rarefaction_diptera.rds")               # load saved output
-```
-
-## Check outputs
-
-### Basic information
-
-Not super necessary for our purposes
-
-``` r
-diptera_cum.rare$DataInfo
-diptera_cum.rare$AsyEst
 ```
 
 ## Plotting
@@ -736,12 +742,16 @@ p
 #| fig-width: 12
 #| fig-format: svg
 
+# Calculate maximum number of individuals
+Max_diptera_individuals <- sum(diptera_wide_red$Overall, na.rm = T)
+
 # Create the base plot with ggiNEXT
 p <- ggiNEXT(diptera_cum.rare, type = 1, color.var = "Assemblage")
 
 # Apply aesthetic enhancements to match your first plot
 p <- p + 
   # Update theme elements
+  geom_vline(xintercept = Max_diptera_individuals, color = "red", linetype = "dashed", linewidth = 0.8) +
   theme_minimal() +
   theme(
     text = element_text(family = "Arial"),
@@ -800,7 +810,7 @@ p$layers <- lapply(p$layers, function(layer) {
 p
 
 # Save the plot
-# ggsave("Plots/Diptera/Rarefaction_diptera.png", p, width = 7, height = 7, dpi = 300, bg = "white")
+ggsave("Plots/Diptera/Rarefaction_diptera.png", p, width = 7, height = 7, dpi = 300, bg = "white")
 ```
 
 ### Accumulation curves in separate plots
@@ -1146,6 +1156,11 @@ hist(TD$Turnover, main = "Distribution of Diptera Turnover", breaks = 30, col = 
 ## Create filtered dataset for overall model
 
 ```{r}
+#| label: Filter dataset for overall models
+#| code-fold: true
+#| warning: false
+#| message: false
+
 TD_red <- TD |> 
   filter(year >= 1974 & year <= 1996)
 ```
@@ -1155,11 +1170,17 @@ TD_red <- TD |>
 ## Check non-linearity of abundance
 
 ```{r}
-library(mgcv)
+#| label: Check non-linearity
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
 
+library(mgcv)
 mod_gam <- gam(Abund ~ s(year), 
                data = TD_red)
-
 plot(mod_gam)
 ```
 
@@ -1644,11 +1665,30 @@ TD_red |>
 
 # Species Richness Models
 
+## Check non-linearity of abundance
+
+```{r}
+#| label: Check non-linearity
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
+
+mod_gam <- gam(SppRich ~ s(year.std), 
+               data = TD_red)
+plot(mod_gam)
+```
+
 ## Species richness models in GLMTMB
 
 ```{r}
 #| label: Choose best distribution to use for species richness models
 #| code-fold: true
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
 
 # Poisson Model (may be too restrictive)
 mod_poisson <- glmmTMB(SppRich ~ year.std, 
@@ -1664,10 +1704,6 @@ mod_gamma <- glmmTMB(SppRich ~ year.std,
 mod_gaussian <- glmmTMB(SppRich ~ year.std, 
                         family = gaussian(link = "identity"), 
                         data = TD_red)
-
-mod_gam <- gam(SppRich ~ s(year.std), 
-               data = TD_red)
-plot(mod_gam)
 
 # Compare models using AIC
 AIC(mod_poisson, mod_gamma, mod_gaussian, mod_gam)
@@ -2080,11 +2116,16 @@ TD_red |>
 
 # Turnover Models
 
-## Turnover models with GLMTMB
+## Check non-linearity of abundance
 
 ```{r}
-#| label: Choose best distribution to use for turnover models
+#| label: Check non-linearity
 #| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 8
+#| fig-width: 12
+#| fig-format: svg
 
 # Remove NAs
 TD_turn <- TD |>
@@ -2092,6 +2133,20 @@ TD_turn <- TD |>
 
 TD_turn_red <- TD_red |>
   filter(complete.cases(TD_red))
+
+mod_gam <- gam(Turnover ~ s(year.std), 
+                     data = TD_turn_red)
+
+plot(mod_gam)
+```
+
+## Turnover models with GLMTMB
+
+```{r}
+#| label: Choose best distribution to use for turnover models
+#| warning: false
+#| message: false
+#| code-fold: true
 
 # Poisson Model (may be too restrictive)
 mod_poisson <- glmmTMB(Turnover ~ year.std, 
@@ -2108,16 +2163,8 @@ mod_gaussian_logit <- glmmTMB(Turnover ~ year.std,
                      family = gaussian(link = "logit"),
                      data = TD_turn_red)
 
-# Gaussian model (if turnover is approximately normal)
-mod_gam <- gam(Turnover ~ s(year.std), 
-                     data = TD_turn_red)
-
-plot(mod_gam)
-
 # Compare models using AIC
 AIC(mod_poisson, mod_gaussian_logit, mod_gaussian, mod_gam)
-
-hist(TD$Turnover)
 ```
 
 ## Fit Gaussian model in GLMTMB

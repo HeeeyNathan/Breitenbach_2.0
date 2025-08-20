@@ -1,4 +1,23 @@
-# ========== LOAD PACKAGES ==========
+---
+title: BLOWES ET AL. 2022 PLOTS
+author: Nathan Jay Baker & Viktor Baranov
+editor: visual
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-overflow: scroll
+    number-sections: true
+    colorlinks: true
+---
+
+# Load necessary packages
+
+```{r}
+#| label: Load packges
+#| warning: false
+#| message: false
+#| code-fold: true
+
 library(tidyverse)
 library(patchwork)
 library(janitor)
@@ -17,92 +36,107 @@ library(tidyr)
 library(dplyr)
 library(gridExtra)
 library(grid)
+```
 
-# ========== LOAD DATA ==========
-diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>
-  as_tibble() |>
-  clean_names() |>
-  rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>
-  filter(!str_detect(original_name, "Summe")) |>
-  filter(order == "Diptera") |>
-  select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>
+# Load the data
+
+```{r}
+#| label: Load data
+#| warning: false
+#| message: false
+#| code-fold: true
+
+data <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |> # read in excel spreadsheet
+  as_tibble() |>                                                           # Make tibble table
+  clean_names() |>                                                         # Homogenize column names
+  rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>         # Change column names
+  filter(!str_detect(original_name, "Summe")) |>                           # delete rows containing "summe"
+  dplyr::select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>               # Removes empty (0) columns
   mutate(trap_new = case_when(
+    trap %in% c('B', 'B-II-X', 'B/II', 'B / II', 'Haus B', 'Haus B/II') ~ 'B',
+    trap %in% c('III', 'Haus III') ~ 'III',
+    trap %in% c('C', 'C-IV', 'C/IV', 'C / IV', 'Haus C', 'Haus C-IV', 'Haus C/IV') ~ 'C',
+    trap %in% c('D', 'Haus D') ~ 'D',
+    trap %in% c('E', 'E-V', 'E/V', 'E / V', 'Haus E - V', 'Haus E/V') ~ 'E',
+    trap %in% c('F', 'F-VI', 'F/VI', 'F / VI', 'F-VII', 'Haus F - VI', 'Haus F/VI') ~ 'F',
+    trap %in% c('G', 'G-VII', 'G/VII', 'G/ VII', 'Haus G', 'Haus G/VII') ~ 'G',
+    trap %in% c('I', 'Haus I') ~ 'I',
+    trap %in% c('A', 'A/I', 'Haus A') ~ 'A',
     trap %in% c('Haus 0') ~ 'O',
-    trap %in% c('Haus A', 'A/I') ~ 'A',
-    trap %in% c('Haus I') ~ 'I',
-    trap %in% c('Haus B', 'B / II', 'B-II-X', 'B/II', 'Haus B/II') ~ 'B',
-    trap %in% c('Haus C-IV', 'C / IV', 'C-IV', 'C/IV', 'Haus C', 'Haus C/IV') ~ 'C',
-    trap %in% c('Haus III') ~ 'III',
-    trap %in% c('Haus D') ~ 'D',
-    trap %in% c('Haus E - V', 'E / V', 'E-V', 'E/V', 'Haus E/V') ~ 'E',
-    trap %in% c('Haus F - VI', 'F / VI', 'F-VI', 'F-VII', 'F/VI', 'Haus F/VI') ~ 'F',
-    trap %in% c('Haus G', 'G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
     trap %in% c('Quelle') ~ 'Source',
     TRUE ~ trap)) |>
-  select(-c(taxa_id:trap)) |>
-  mutate(sp_name  = validated_name,
-         trap     = trap_new,
-         trap     = factor(trap)) |>
-  arrange(trap, family, sp_name) |>
-  select(-c(validated_name, trap_new, order)) |>
-  select(trap, sp_name, family, everything())
+  dplyr::select(-c(taxa_id:trap)) |>                                       # Remove unnecessary columns
+  mutate(sp_name  = validated_name,                                        # Change column names
+         trap     = trap_new,                                              # Change column names
+         trap     = factor(trap)) |>                                       # make trap a factor
+  arrange(trap, family, sp_name) |>                                        # Sort data
+  dplyr::select(-c(validated_name, trap_new)) |>                           # Remove unnecessary columns
+  dplyr::select(trap, sp_name, family, everything())                       # rearrange columns
 
-ept <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>
-  as_tibble() |>
-  clean_names() |>
-  rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>
-  filter(!str_detect(original_name, "Summe")) |>
-  filter(order %in% c("Ephemeroptera", "Plecoptera", "Trichoptera")) |>
-  select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>
-  mutate(trap_new = case_when(
-    trap %in% c('Haus 0') ~ 'O',
-    trap %in% c('Haus A', 'A/I') ~ 'A',
-    trap %in% c('Haus I') ~ 'I',
-    trap %in% c('Haus B', 'B / II', 'B-II-X', 'B/II', 'Haus B/II') ~ 'B',
-    trap %in% c('Haus C-IV', 'C / IV', 'C-IV', 'C/IV', 'Haus C', 'Haus C/IV') ~ 'C',
-    trap %in% c('Haus III') ~ 'III',
-    trap %in% c('Haus D') ~ 'D',
-    trap %in% c('Haus E - V', 'E / V', 'E-V', 'E/V', 'Haus E/V') ~ 'E',
-    trap %in% c('Haus F - VI', 'F / VI', 'F-VI', 'F-VII', 'F/VI', 'Haus F/VI') ~ 'F',
-    trap %in% c('Haus G', 'G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
-    trap %in% c('Quelle') ~ 'Source',
-    TRUE ~ trap)) |>
-  filter(!str_detect(trap_new, "D")) |>
-  select(-c(taxa_id:trap)) |>
-  mutate(sp_name  = validated_name,
-         trap     = trap_new,
-         trap     = factor(trap)) |>
-  arrange(trap, family, sp_name) |>
-  select(-c(validated_name, trap_new, order)) |>
-  select(trap, sp_name, family, everything())
+diptera <- data |>
+  filter(order %in% "Diptera") |>                                          # Keeps only Diptera taxa
+  dplyr::select(-order)                                                    # Remove unnecessary columns
 
-# ========== REMOVE DUPLICATES ==========
+ept <- data |> 
+  filter(order %in% c("Ephemeroptera", "Plecoptera", "Trichoptera")) |>    # Keeps only EPT taxa
+  dplyr::select(-order, -`2006`)                                           # Remove unnecessary columns, in 2006, there were no EPT data
+```
+
+# Initial data wrangling
+
+```{r}
+#| label: Initial data wrangling
+#| warning: false
+#| message: false
+#| code-fold: true
+
+# Remove unwanted traps
 diptera_clean <- diptera |>
-  group_by(trap, sp_name, family) |>
-  summarise(across(where(is.numeric), ~sum(.x, na.rm = TRUE)), .groups = "drop")
+  group_by(trap,
+           sp_name,
+           family) |>
+  summarise(across(where(is.numeric),
+                   ~sum(.x, na.rm = TRUE)),
+            .groups = "drop")
 
 ept_clean <- ept |>
-  group_by(trap, sp_name, family) |>
-  summarise(across(where(is.numeric), ~sum(.x, na.rm = TRUE)), .groups = "drop")
+  group_by(trap,
+           sp_name,
+           family) |>
+  summarise(across(where(is.numeric),
+                   ~sum(.x, na.rm = TRUE)),
+            .groups = "drop")
 
-# ========== TRANSFORM DATA ==========
+# Transform data
 diptera_long <- diptera_clean |>
-  pivot_longer(cols = starts_with("19") | starts_with("20"),
-               names_to = "year", values_to = "abundance") |>
-  mutate(trap_code = paste(trap, year, sep = "_"),
-         year = as.numeric(year)) |>
-  filter(abundance != 0) |>
-  arrange(trap, year)
+  pivot_longer(
+    cols = starts_with("19") | starts_with("20"),                          # Specify the year column to pivot
+    names_to = "year",                                                     # Name column that will hold year values
+    values_to = "abundance") |>                                            # Name column that will hold the counts
+  mutate(trap_code = paste(trap, year, sep = "_")) |>                      # create new column with trap_code (trap name + year)
+  mutate(year = as.numeric(year)) |>                                       # make year variable numeric
+  filter(abundance != 0) |>                                                # Remove rows where count is 0
+  arrange(trap, year)                                                      # Sort data
 
 ept_long <- ept_clean |>
-  pivot_longer(cols = starts_with("19") | starts_with("20"),
-               names_to = "year", values_to = "abundance") |>
-  mutate(trap_code = paste(trap, year, sep = "_"),
-         year = as.numeric(year)) |>
-  filter(abundance != 0) |>
-  arrange(trap, year)
+  pivot_longer(
+    cols = starts_with("19") | starts_with("20"),                          # Specify the year column to pivot
+    names_to = "year",                                                     # Name column that will hold year values
+    values_to = "abundance") |>                                            # Name column that will hold the counts
+  mutate(trap_code = paste(trap, year, sep = "_")) |>                      # create new column with trap_code (trap name + year)
+  mutate(year = as.numeric(year)) |>                                       # make year variable numeric
+  filter(abundance != 0) |>                                                # Remove rows where count is 0
+  arrange(trap, year)                                                      # Sort data
+```
 
-# ========== FUNCTION TO CALCULATE DELTAS ==========
+# FUNCTION TO CALCULATE DELTAS
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
+
 calculate_deltas <- function(long_data, group_name) {
   # Separate trap and year
   long_data_clean <- long_data %>%
@@ -185,37 +219,72 @@ calculate_deltas <- function(long_data, group_name) {
 
   return(delta_results)
 }
+```
 
-# ========== CALCULATE DELTAS FOR BOTH GROUPS ==========
+# Analysis
+
+## Calculate deltas
+
+### DIPTERA
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
+
 diptera_deltas <- calculate_deltas(diptera_long, "Diptera")
+```
+
+### EPT
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
+
 ept_deltas <- calculate_deltas(ept_long, "EPT")
+```
 
-# Print summaries to check differences
-cat("DIPTERA SUMMARY:\n")
-print(summary(diptera_deltas[c("Delta_N", "Delta_S", "Delta_S_rare")]))
-cat("\nEPT SUMMARY:\n")
-print(summary(ept_deltas[c("Delta_N", "Delta_S", "Delta_S_rare")]))
+## Calculate correlations
 
-# ========== CALCULATE CORRELATIONS ==========
-# Diptera correlations
+### DIPTERA
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
+
 diptera_cor_N_S <- cor(diptera_deltas$Delta_N, diptera_deltas$Delta_S, use = "complete.obs")
 diptera_cor_Srare_S <- cor(diptera_deltas$Delta_S_rare, diptera_deltas$Delta_S, use = "complete.obs")
 diptera_cor_Nrare_S <- cor(diptera_deltas$Delta_N, diptera_deltas$Delta_S_rare, use = "complete.obs")
+```
 
-# EPT correlations
+### EPT
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
+
 ept_cor_N_S <- cor(ept_deltas$Delta_N, ept_deltas$Delta_S, use = "complete.obs")
 ept_cor_Srare_S <- cor(ept_deltas$Delta_S_rare, ept_deltas$Delta_S, use = "complete.obs")
 ept_cor_Nrare_S <- cor(ept_deltas$Delta_N, ept_deltas$Delta_S_rare, use = "complete.obs")
+```
 
-cat("CORRELATIONS:\n")
-cat("Diptera - Delta_N vs Delta_S:", round(diptera_cor_N_S, 2), "\n")
-cat("Diptera - Delta_S_rare vs Delta_S:", round(diptera_cor_Srare_S, 2), "\n")
-cat("Diptera - Delta_N vs Delta_S_rare:", round(diptera_cor_Nrare_S, 2), "\n")
-cat("EPT - Delta_N vs Delta_S:", round(ept_cor_N_S, 2), "\n")
-cat("EPT - Delta_S_rare vs Delta_S:", round(ept_cor_Srare_S, 2), "\n")
-cat("EPT - Delta_N vs Delta_S_rare:", round(ept_cor_Nrare_S, 2), "\n")
+# Plotting
 
-# ========== DEFINE PLOTTING THEME ==========
+## Define theme
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
+
 theme_nice <- function() {
   theme_minimal() +
     theme(
@@ -232,9 +301,20 @@ theme_nice <- function() {
       strip.text = element_text(size = 14, face = "bold")
     )
 }
+```
 
-# ========== CREATE PLOTS WITH ACTUAL CORRELATIONS ==========
-# DIPTERA PLOTS - Overall
+## DIPTERA
+
+### Overall
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 10
+#| fig-width: 10
+#| fig-format: svg
+
 p1_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   geom_point(alpha = 0.6, color = "#8B0000", size = 3) +
   geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
@@ -276,8 +356,18 @@ p3_dip <- ggplot(diptera_deltas, aes(x = Delta_S_rare, y = Delta_N/1000)) +
            label = paste("r =", round(diptera_cor_Nrare_S, 2)),
            hjust = 1.1, vjust = -0.5, size = 7, fontface = "italic", color = "black")
 p3_dip
+```
 
-# DIPTERA PLOTS - Individual traps (faceted)
+### Individual traps
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 10
+#| fig-width: 10
+#| fig-format: svg
+
 p1a_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   geom_point(alpha = 0.6, color = "#8B0000") +
   geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
@@ -289,7 +379,7 @@ p1a_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
        title = "DIPTERA")
 p1a_dip
 
-ggsave("Plots/Diptera/Delta_N_S_plot_diptera.png", p1a_dip, width = 12, height = 12, dpi = 300, bg = "white")
+ggsave("Plots/All plots for publication/FigureS1.png", p1a_dip, width = 12, height = 12, dpi = 450, bg = "white")
 
 p2a_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
   geom_point(alpha = 0.6, color = "#8B0000") +
@@ -302,10 +392,22 @@ p2a_dip <- ggplot(diptera_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
        title = "DIPTERA")
 p2a_dip
 
-ggsave("Plots/Diptera/Delta_S_Srare_plot_diptera.png", p2a_dip, width = 12, height = 12, dpi = 300, bg = "white")
+ggsave("Plots/All plots for publication/FigureS2.png", p2a_dip, width = 12, height = 12, dpi = 450, bg = "white")
+```
 
-# EPT PLOTS - Overall
-p3_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
+## EPT
+
+### Overall
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 10
+#| fig-width: 10
+#| fig-format: svg
+
+p4_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   geom_point(alpha = 0.6, color = "#000080", size = 3) +
   geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
   stat_ellipse(type = "norm", level = 0.95, color = "#4169E1", linewidth = 1) +
@@ -318,9 +420,9 @@ p3_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   annotate("text", x = -Inf, y = Inf,
            label = "C",
            hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
-p3_ept
+p4_ept
 
-p4_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
+p5_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
   geom_point(alpha = 0.6, color = "#000080", size = 3) +
   geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
   stat_ellipse(type = "norm", level = 0.95, color = "#4169E1", linewidth = 1) +
@@ -333,9 +435,9 @@ p4_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
   annotate("text", x = -Inf, y = Inf,
            label = "D",
            hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
-p4_ept
+p5_ept
 
-p5_dip <- ggplot(ept_deltas, aes(x = Delta_S_rare, y = Delta_N/1000)) +
+p6_dip <- ggplot(ept_deltas, aes(x = Delta_S_rare, y = Delta_N/1000)) +
   geom_point(alpha = 0.6, color = "#000080", size = 3) +
   geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
   stat_ellipse(type = "norm", level = 0.95, color = "#4169E1", linewidth = 1) +
@@ -345,10 +447,20 @@ p5_dip <- ggplot(ept_deltas, aes(x = Delta_S_rare, y = Delta_N/1000)) +
   annotate("text", x = Inf, y = -Inf,
            label = paste("r =", round(ept_cor_Nrare_S, 2)),
            hjust = 1.1, vjust = -0.5, size = 7, fontface = "italic", color = "black")
-p5_dip
+p6_dip
+```
 
-# EPT PLOTS - Individual traps (faceted)
-p3a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
+### Individual traps
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 10
+#| fig-width: 10
+#| fig-format: svg
+
+p4a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   geom_point(alpha = 0.6, color = "#000080") +
   geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
   stat_ellipse(level = 0.95, color = "#4169E1", linewidth = 1) +
@@ -357,11 +469,11 @@ p3a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_N/1000)) +
   labs(x = expression(bold(Delta*S)),
        y = expression(bold(Delta*N)~bold("(in thousands)")),
        title = "EPT")
-p3a_ept
+p4a_ept
 
-ggsave("Plots/EPT/Delta_N_S_plot_ept.png", p3a_ept, width = 12, height = 12, dpi = 300, bg = "white")
+ggsave("Plots/All plots for publication/FigureS3.png", p4a_ept, width = 12, height = 12, dpi = 450, bg = "white")
 
-p4a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
+p5a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
   geom_point(alpha = 0.6, color = "#000080") +
   geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", linewidth = 1) +
   stat_ellipse(level = 0.95, color = "#4169E1", linewidth = 1) +
@@ -370,11 +482,21 @@ p4a_ept <- ggplot(ept_deltas, aes(x = Delta_S, y = Delta_S_rare)) +
   labs(x = expression(bold(Delta*S)),
        y = expression(bold(Delta*S[n])),
        title = "EPT")
-p4a_ept
+p5a_ept
 
-ggsave("Plots/EPT/Delta_S_Srare_plot_ept.png", p4a_ept, width = 12, height = 12, dpi = 300, bg = "white")
+ggsave("Plots/All plots for publication/FigureS4.png", p5a_ept, width = 12, height = 12, dpi = 450, bg = "white")
+```
 
-# ========== CREATE COMPOSITE PLOT ==========
+## Combined plot
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 10
+#| fig-width: 10
+#| fig-format: svg
+
 # Set up shared axis titles
 p1_final <- p1_dip +
   ggtitle("DIPTERA") +
@@ -382,28 +504,22 @@ p1_final <- p1_dip +
 
 p2_final <- p2_dip
 
-p3_final <- p3_ept +
+p4_final <- p4_ept +
   ggtitle("EPT") +
   theme(axis.title.x = element_blank(), axis.title.y = element_blank())
 
-p4_final <- p4_ept +
+p5_final <- p5_ept +
   theme(axis.title.y = element_blank())
 
 # Combine plots
-final_composite_plot <- (p1_final / p2_final) | (p3_final / p4_final)
+final_composite_plot <- (p1_final / p2_final) | (p4_final / p5_final)
 
 final_composite_plot <- final_composite_plot +
   plot_layout(heights = c(1, 1)) +
   plot_annotation(theme = theme(plot.margin = margin(3, 3, 3, 3)))
 
 # Display the plot
-print(final_composite_plot)
+final_composite_plot
 
-ggsave("Plots/Delta_N_S_Srare_plot.png", final_composite_plot, width = 12, height = 12, dpi = 300, bg = "white")
-
-# ========== DISPLAY INDIVIDUAL TRAP PLOTS ==========
-print(p1a_dip)
-print(p2a_dip)
-
-print(p3a_ept)
-print(p4a_ept)
+ggsave("Plots/All plots for publication/Figure4.png", final_composite_plot, width = 12, height = 12, dpi = 450, bg = "white")
+```

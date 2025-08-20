@@ -1,5 +1,5 @@
 ---
-title: Breitenbach 2.0 - DIPTERA
+title: COMBINING ALL MODEL PLOTS
 author: Nathan Jay Baker & Viktor Baranov
 editor: visual
 date: "`r Sys.Date()`"
@@ -8,12 +8,6 @@ format:
     code-overflow: scroll
     number-sections: true
     colorlinks: true
-  # pdf:
-  #   code-overflow: wrap
-  #   pdf-engine: lualatex
-  #   toc: true
-  #   number-sections: true
-  #   colorlinks: true
 ---
 
 # Load necessary packages
@@ -244,5 +238,5 @@ composite_plot <- composite_plot +
 # Display the plot
 print(composite_plot)
 
-ggsave("Plots/All_model_outputs.png", plot = composite_plot, width = 12, height = 18, dpi = 300, bg = "white")
+ggsave("Plots/All plots for publication/Figure1.png", plot = composite_plot, width = 12, height = 18, dpi = 450, bg = "white")
 ```

@@ -1,4 +1,23 @@
-# ========== LOAD PACKAGES ==========
+---
+title: CHAO-HILL PLOTS BY TRAP
+author: Nathan Jay Baker & Viktor Baranov
+editor: visual
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-overflow: scroll
+    number-sections: true
+    colorlinks: true
+---
+
+# Load necessary packages
+
+```{r}
+#| label: Load packges
+#| warning: false
+#| message: false
+#| code-fold: true
+
 library(tidyverse)
 library(janitor)
 library(SpadeR)
@@ -12,103 +31,78 @@ require(gridExtra)
 library(data.table)
 library(entropart)
 library(future.apply)
+```
 
-# ========== LOAD DATA ==========
-diptera <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |> # read in excel spreadsheet
+# Load the data
+
+```{r}
+#| label: Load data
+#| warning: false
+#| message: false
+#| code-fold: true
+
+data <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |> # read in excel spreadsheet
   as_tibble() |>                                                           # Make tibble table
   clean_names() |>                                                         # Homogenize column names
   rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>         # Change column names
   filter(!str_detect(original_name, "Summe")) |>                           # delete rows containing "summe"
-  filter(order == "Diptera") |>                                            # Keeps only Dipteran taxa
-  select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>                      # Removes empty (0) columns
-  mutate(trap_new = case_when(                                             # Homogenize trap names
+  dplyr::select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>               # Removes empty (0) columns
+  mutate(trap_new = case_when(
+    trap %in% c('B', 'B-II-X', 'B/II', 'B / II', 'Haus B', 'Haus B/II') ~ 'B',
+    trap %in% c('III', 'Haus III') ~ 'III',
+    trap %in% c('C', 'C-IV', 'C/IV', 'C / IV', 'Haus C', 'Haus C-IV', 'Haus C/IV') ~ 'C',
+    trap %in% c('D', 'Haus D') ~ 'D',
+    trap %in% c('E', 'E-V', 'E/V', 'E / V', 'Haus E - V', 'Haus E/V') ~ 'E',
+    trap %in% c('F', 'F-VI', 'F/VI', 'F / VI', 'F-VII', 'Haus F - VI', 'Haus F/VI') ~ 'F',
+    trap %in% c('G', 'G-VII', 'G/VII', 'G/ VII', 'Haus G', 'Haus G/VII') ~ 'G',
+    trap %in% c('I', 'Haus I') ~ 'I',
+    trap %in% c('A', 'A/I', 'Haus A') ~ 'A',
     trap %in% c('Haus 0') ~ 'O',
-    trap %in% c('Haus A', 'A/I') ~ 'A',
-    trap %in% c('Haus I') ~ 'I',
-    trap %in% c('Haus B', 'B / II', 'B-II-X', 'B/II', 'Haus B/II') ~ 'B',
-    trap %in% c('Haus C-IV', 'C / IV', 'C-IV', 'C/IV', 'Haus C', 'Haus C/IV') ~ 'C',
-    trap %in% c('Haus III') ~ 'III',
-    trap %in% c('Haus D') ~ 'D',
-    trap %in% c('Haus E - V', 'E / V', 'E-V', 'E/V', 'Haus E/V') ~ 'E',
-    trap %in% c('Haus F - VI', 'F / VI', 'F-VI', 'F-VII', 'F/VI', 'Haus F/VI') ~ 'F',
-    trap %in% c('Haus G', 'G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
     trap %in% c('Quelle') ~ 'Source',
     TRUE ~ trap)) |>
-  select(-c(taxa_id:trap)) |>                                              # Remove unnecessary columns
+  dplyr::select(-c(taxa_id:trap)) |>                                       # Remove unnecessary columns
   mutate(sp_name  = validated_name,                                        # Change column names
          trap     = trap_new,                                              # Change column names
          trap     = factor(trap)) |>                                       # make trap a factor
   arrange(trap, family, sp_name) |>                                        # Sort data
-  select(-c(validated_name, trap_new, order)) |>                           # Remove unnecessary columns
-  select(trap, sp_name, family, everything()) |>                           # rearrange columns
-  print()
-diptera |>
-  select(where(is.numeric)) |>
-  unlist() |>
-  sum(na.rm = TRUE)      # check combined abundance of all species
+  dplyr::select(-c(validated_name, trap_new)) |>                           # Remove unnecessary columns
+  dplyr::select(trap, sp_name, family, everything())                       # rearrange columns
 
-ept <- read_xlsx("Data/Breitenbach_community_data_17.12.2024.xlsx") |>     # read in excel spreadsheet
-  as_tibble() |>                                                           # Make tibble table
-  clean_names() |>                                                         # Homogenize column names
-  rename_with(~ gsub("^x", "", .x), .cols = matches("^x[0-9]")) |>         # Change column names
-  filter(!str_detect(original_name, "Summe")) |>                           # delete rows containing "summe"
+diptera <- data |>
+  filter(order %in% "Diptera") |>                                          # Keeps only Diptera taxa
+  dplyr::select(-order)                                                    # Remove unnecessary columns
+
+ept <- data |> 
   filter(order %in% c("Ephemeroptera", "Plecoptera", "Trichoptera")) |>    # Keeps only EPT taxa
-  select(where(~ !is.numeric(.x) || sum(.x) != 0)) |>                      # Removes empty (0) columns
-  mutate(trap_new = case_when(                                             # Homogenize trap names
-    trap %in% c('Haus 0') ~ 'O',
-    trap %in% c('Haus A', 'A/I') ~ 'A',
-    trap %in% c('Haus I') ~ 'I',
-    trap %in% c('Haus B', 'B / II', 'B-II-X', 'B/II', 'Haus B/II') ~ 'B',
-    trap %in% c('Haus C-IV', 'C / IV', 'C-IV', 'C/IV', 'Haus C', 'Haus C/IV') ~ 'C',
-    trap %in% c('Haus III') ~ 'III',
-    trap %in% c('Haus D') ~ 'D',
-    trap %in% c('Haus E - V', 'E / V', 'E-V', 'E/V', 'Haus E/V') ~ 'E',
-    trap %in% c('Haus F - VI', 'F / VI', 'F-VI', 'F-VII', 'F/VI', 'Haus F/VI') ~ 'F',
-    trap %in% c('Haus G', 'G-VII', 'G/ VII', 'G/VII', 'Haus G/VII') ~ 'G',
-    trap %in% c('Quelle') ~ 'Source',
-    TRUE ~ trap)) |>
-  filter(!str_detect(trap_new, "D")) |>                                    # delete rows for trap D (only sampled 1983)
-  select(-c(taxa_id:trap)) |>                                              # Remove unnecessary columns
-  mutate(sp_name  = validated_name,                                        # Change column names
-         trap     = trap_new,                                              # Change column names
-         trap     = factor(trap)) |>                                       # make trap a factor
-  arrange(trap, family, sp_name) |>                                        # Sort data
-  select(-c(validated_name, trap_new, order)) |>                           # Remove unnecessary columns
-  select(trap, sp_name, family, everything()) |>                           # rearrange columns
-  print()
-ept |>
-  select(where(is.numeric)) |>
-  unlist() |>
-  sum(na.rm = TRUE)                                                        # check combined abundance of all species
+  dplyr::select(-order, -`2006`)                                           # Remove unnecessary columns, in 2006, there were no EPT data
+```
 
-# ========== REMOVE DUPLICATES ==========
+# Initial data wrangling
+
+```{r}
+#| label: Initial data wrangling
+#| warning: false
+#| message: false
+#| code-fold: true
+
+# Remove unwanted traps
 diptera_clean <- diptera |>
   group_by(trap,
            sp_name,
-           family) |>                                                      # Grouping by trap, sp_name, and family
+           family) |>
   summarise(across(where(is.numeric),
                    ~sum(.x, na.rm = TRUE)),
-            .groups = "drop") |>
-  print()
-diptera_clean |>
-  select(where(is.numeric)) |>
-  unlist() |>
-  sum(na.rm = TRUE)                                                        # check combined abundance of all species
+            .groups = "drop")
 
 ept_clean <- ept |>
   group_by(trap,
            sp_name,
-           family) |>                                                      # Grouping by trap, sp_name, and family
+           family) |>
   summarise(across(where(is.numeric),
                    ~sum(.x, na.rm = TRUE)),
-            .groups = "drop") |>
-  print()
-ept_clean |>
-  select(where(is.numeric)) |>
-  unlist() |>
-  sum(na.rm = TRUE)
+            .groups = "drop")
 
-# ========== TRANSFORM DATA ==========
+# Transform data
 diptera_long <- diptera_clean |>
   pivot_longer(
     cols = starts_with("19") | starts_with("20"),                          # Specify the year column to pivot
@@ -129,58 +123,118 @@ ept_long <- ept_clean |>
   filter(abundance != 0) |>                                                # Remove rows where count is 0
   arrange(trap, year)                                                      # Sort data
 
-# ========== AGGREGATE DATA BY TRAP ==========
+# Aggregate data by trap
 diptera_agg <- diptera_long |>
-  group_by(sp_name,
+  group_by(sp_name, 
            trap) |>                                                        # Group by sp_name and trap
   summarise(abundance = sum(abundance),
             .groups = "drop") |>                                           # Summarise with the sum of "abundance"
   arrange(trap) |>                                                         # Sort data
-  print()
-sum(diptera_agg$abundance)                                                 # check combined abundance of all species
-
+  filter(!trap %in% c("Source", "D", "F")) |> 
+  mutate(trap = factor(trap, levels = c("A", "B", "C", "E", "G", "I", "III")))
+  
 ept_agg <- ept_long |>
   group_by(sp_name,
            trap) |>                                                        # Group by sp_name and trap
   summarise(abundance = sum(abundance),
             .groups = "drop") |>                                           # Summarise with the sum of "abundance"
   arrange(trap) |>                                                         # Sort data
-  print()
-sum(ept_agg$abundance)                                                     # check combined abundance of all species
+  filter(!trap %in% c("Source", "D", "F", "O")) |> 
+  mutate(trap = factor(trap, levels = c("A", "B", "C", "E", "G", "I", "III")))
 
-# ========== PIVOT DATA ==========
+# pivot data
 diptera_wide <- diptera_agg |>
   pivot_wider(names_from  = trap,
               values_from = abundance,
               values_fill = 0,
               values_fn   = sum) |>
-  arrange(sp_name) |>                                                      # Sort data
-  print()
+  mutate(Overall = rowSums(across(where(is.numeric)))) |>
+  arrange(sp_name)                                                         # Sort data
 
 ept_wide <- ept_agg |>
   pivot_wider(names_from  = trap,
               values_from = abundance,
               values_fill = 0,
               values_fn   = sum) |>
-  arrange(sp_name) |>                                                      # Sort data
-  print()
+  mutate(Overall = rowSums(across(where(is.numeric)))) |>
+  arrange(sp_name)                                                         # Sort data
+```
 
+## Check overall abundance and richness of the two group
 
-#===============================================================================================
+### DIPTERA abundance
 
-# R scripts for computing diversity (Hill numbers) profile using individual-based abundance data or sampling-unit-based incidence data.
-# In all functions, param x is a vector of species sample frequencies (for abundance data) or incidence-based sample frequencies (for incidence data).
-# For incidence data, the first entry of x must be the number of sampling units.
-# In all functions, param q is the diversity order; the suggested range for q is [0, 3].
-# If you use the scripts for publishing papers, please cite Chao and Jost 2015 MEE paper (Appendix S8).
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
 
-#-----------------------------------------------
-# Diversity profile estimator (abundance data)
-#-----------------------------------------------
-#' Chao_Hill_abu(x, q) is a function of obtaining estimators of Hill numbers of order q based on abundance data.
-#' @param x a vector of species sample frequencies.
-#' @param q a numeric or a vector of diversity order; The suggested range for q is [0, 3].
-#' @return a numerical vector of diversity.
+# total abundance of diptera
+diptera_agg |>
+  select(where(is.numeric)) |>
+  unlist() |>
+  sum(na.rm = TRUE)
+```
+
+### DIPTERA richness
+
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
+# total species richness of diptera
+diptera_agg |> 
+  summarise(unique_species = n_distinct(sp_name)) |> 
+  pull(unique_species)
+```
+
+### EPT abundance
+
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
+# total abundance of ept
+ept_agg |>
+  select(where(is.numeric)) |>
+  unlist() |>
+  sum(na.rm = TRUE)
+```
+
+### EPT richness
+
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
+# total species richness of diptera
+ept_agg |> 
+  summarise(unique_species = n_distinct(sp_name)) |> 
+  pull(unique_species)
+```
+
+# Add functions for Chao-Hill numbers
+
+R scripts for computing diversity (Hill numbers) profile using individual-based abundance data or sampling-unit-based incidence data. In all functions, param x is a vector of species sample frequencies (for abundance data) or incidence-based sample frequencies (for incidence data). For incidence data, the first entry of x must be the number of sampling units. In all functions, param q is the diversity order; the suggested range for q is \[0, 3\]. If you use the scripts for publishing papers, please cite Chao and Jost 2015 MEE paper.
+
+## Diversity profile estimator (abundance data)
+
+Chao_Hill_abu(x, q) is a function of obtaining estimators of Hill numbers of order q based on abundance data.
+
+@param x a vector of species sample frequencies.
+
+@param q a numeric or a vector of diversity order; The suggested range for q is \[0, 3\].
+
+@return a numerical vector of diversity.
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
 
 Chao_Hill_abu = function(x,q){
   x = x[x>0]
@@ -214,14 +268,23 @@ Chao_Hill_abu = function(x,q){
   }
   sapply(q, Sub)
 }
+```
 
-#-----------------------------------------------
-# Diversity profile estimator (incidence data)
-#-----------------------------------------------
-#' Chao_Hill_inc(x, q) is a function of obtaining estimators of Hill numbers of order q based on incidence data.
-#' @param x a vector of species incidence-based sample frequencies. The first entry of x must be the number of sampling units.
-#' @param q a numeric or a vector of diversity order.
-#' @return a numerical vector.
+## Diversity profile estimator (incidence data)
+
+Chao_Hill_inc(x, q) is a function of obtaining estimators of Hill numbers of order q based on incidence data.
+
+@param x a vector of species incidence-based sample frequencies. The first entry of x must be the number of sampling units.
+
+@param q a numeric or a vector of diversity order.
+
+@return a numerical vector.
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
 
 Chao_Hill_inc = function(x,q){
   n = x[1]
@@ -272,15 +335,25 @@ Chao_Hill = function(x,q,datatype = c("abundance","incidence")){
   }
   return(est)
 }
+```
 
-#-----------------------
-# The empirical profile
-#-----------------------
-#' Hill(x, q, datatype) is a function of obtaining the empirical Hill numbers of order q based on abundance data or incidence data.
-#' @param x a vector of species sample frequencies (for abundance data), or incidence-based sample frequencies (1st entry must be the number of sampling unit).
-#' @param q a numeric or a vector of diversity order.
-#' @param datatype a character of data type,"abundance" or "incidence".
-#' @return a numerical vector.
+## The empirical profile
+
+Hill(x, q, datatype) is a function of obtaining the empirical Hill numbers of order q based on abundance data or incidence data.
+
+@param x a vector of species sample frequencies (for abundance data), or incidence-based sample frequencies (1st entry must be the number of sampling unit).
+
+@param q a numeric or a vector of diversity order.
+
+@param datatype a character of data type,"abundance" or "incidence".
+
+@return a numerical vector.
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
 
 Hill <- function(x,q,datatype = c("abundance","incidence")){
   if(datatype=="incidence"){x = x[-1]}
@@ -292,13 +365,21 @@ Hill <- function(x,q,datatype = c("abundance","incidence")){
   }
   sapply(q, Sub)
 }
+```
 
-#-----------------------------------------
-# The bootstrap method for obtaining s.e.
-#-----------------------------------------
-#' Bt_prob_abu(x) is a function of estimating the species probabilities in the bootstrap assemblage based on abundance data.
-#' @param x a vector of species sample frequencies.
-#' @return a numeric vector.
+## The bootstrap method for obtaining s.e.
+
+Bt_prob_abu(x) is a function of estimating the species probabilities in the bootstrap assemblage based on abundance data.
+
+@param x a vector of species sample frequencies.
+
+@return a numeric vector.
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
 
 Bt_prob_abu = function(x){
   x = x[x>0]
@@ -314,10 +395,19 @@ Bt_prob_abu = function(x){
   p.new=c(p.new,rep(p0,f0))
   return(p.new)
 }
+```
 
-#' Bt_prob_inc(x) is a function of estimating the species incidence probabilities in the bootstrap assemblage based on incidence data.
-#' @param x a vector of incidence-based sample frequencies (1st entry must be the number of sampling unit).
-#' @return a numeric vector.
+Bt_prob_inc(x) is a function of estimating the species incidence probabilities in the bootstrap assemblage based on incidence data.
+
+@param x a vector of incidence-based sample frequencies (1st entry must be the number of sampling unit).
+
+@return a numeric vector.
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
 
 Bt_prob_inc = function(x){
   n = x[1]
@@ -335,11 +425,21 @@ Bt_prob_inc = function(x){
   p.new=c(p.new,rep(p0,f0))
   return(p.new)
 }
+```
 
-#' Bt_prob(x,datatype) combines the two functions Bt_prob_abu and Bt_prob_inc for a specified datatype.
-#' @param x a vector of species sample frequencies (for abundance data), or incidence-based sample frequencies (1st entry must be the number of sampling unit).
-#' @param datatype a character of data type,"abundance" or "incidence".
-#' @return a numeric vector.
+Bt_prob(x,datatype) combines the two functions Bt_prob_abu and Bt_prob_inc for a specified datatype.
+
+@param x a vector of species sample frequencies (for abundance data), or incidence-based sample frequencies (1st entry must be the number of sampling unit).
+
+@param datatype a character of data type,"abundance" or "incidence".
+
+@return a numeric vector.
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
 
 Bt_prob = function(x,datatype = c("abundance","incidence")){
   datatype = match.arg(datatype,c("abundance","incidence"))
@@ -350,18 +450,27 @@ Bt_prob = function(x,datatype = c("abundance","incidence")){
   }
   return(prob)
 }
+```
 
-#' Bootstrap.CI(x,q,B,datatype,conf) is a function of calculating the bootsrapping standard error based on abundance data or incidence data.
-#' @param x a vector of species sample frequencies (for abundance data) or incidence-based sample frequencies (1st entry must be the number of sampling unit).
-#' @param q a numeric or a vector of diversity order.
-#' @param B an integer to specify the number of replications in the bootstrap procedure, B = 1000 is suggested for constructing confidence intervals;
-#'  To save running time, use a smaller value (e.g. B = 200)..
-#' @param datatype a character of data type,"abundance" or "incidence".
-#' @param conf a confidence coefficient between 0 and 1.
-#' @return a list, consisting of 3 matrices including respectively the difference between the average and lower confidence bound of the B bootstrap estimates,
-#'  the difference between the upper confidence bound and the average of the B bootstrap estimates, and the bootstrap standard error of the diversity estimate.
-#'  In each matrix, the first row gives the results for the empirical diversity, and the second row gives the results for the proposed diversity estimates.
-#'  Columns give the results for different orders of q.
+Bootstrap.CI(x,q,B,datatype,conf) is a function of calculating the bootsrapping standard error based on abundance data or incidence data.
+
+@param x a vector of species sample frequencies (for abundance data) or incidence-based sample frequencies (1st entry must be the number of sampling unit).
+
+@param q a numeric or a vector of diversity order.
+
+@param B an integer to specify the number of replications in the bootstrap procedure, B = 1000 is suggested for constructing confidence intervals; To save running time, use a smaller value (e.g. B = 200).
+
+@param datatype a character of data type,"abundance" or "incidence".
+
+@param conf a confidence coefficient between 0 and 1.
+
+@return a list, consisting of 3 matrices including respectively the difference between the average and lower confidence bound of the B bootstrap estimates, the difference between the upper confidence bound and the average of the B bootstrap estimates, and the bootstrap standard error of the diversity estimate. In each matrix, the first row gives the results for the empirical diversity, and the second row gives the results for the proposed diversity estimates. Columns give the results for different orders of q.
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
 
 Bootstrap.CI = function(x,q,B = 1000, datatype = c("abundance","incidence"),conf = 0.95){
   datatype = match.arg(datatype,c("abundance","incidence"))
@@ -398,23 +507,33 @@ Bootstrap.CI = function(x,q,B = 1000, datatype = c("abundance","incidence"),conf
   return(list(LCI=LCI,UCI=UCI,se=se))
 
 }
+```
 
-#------------------------
-# Main function ChaoHill
-#------------------------
-#' ChaoHill(dat, datatype, from, to, interval, B, conf) is the function of calculating the empirical and the proposed diversity profile,
-#' their bootsrap standard errors and confidance intervals.
-#' @param dat a vector of species sample frequencies (for abundance data), or incidence-based sample frequencies (1st entry must be the number of sampling unit).
-#' @param datatype a character of data type,"abundance" or "incidence".
-#' @param from a numeric number of diversity order q (the start order of profile).
-#' @param to a numeric number of diversity order q (the end order of profile).
-#' @param interval a numeric number to specify each increment of q from the start to end order.
-#' @param B an integer to specify the number of bootstrap replications, B = 1000 is suggested for constructing confidence intervals;
-#'  To save running time, use a smaller value (e.g. B = 200).
-#' @param conf a confidence coefficient between 0 and 1.
-#' @return a list, consisting of 4 matrices including respectively diversity estimates, bootstrap standard errors, lower confidence bounds, and upper confidence bounds.
-#'  In each matrix, the first row gives the results for the empirical diversity, and the second row gives the results for the proposed diversity estimates.
-#'  Columns give the results for different orders of q.
+## Main function ChaoHill
+
+ChaoHill(dat, datatype, from, to, interval, B, conf) is the function of calculating the empirical and the proposed diversity profile, their bootsrap standard errors and confidance intervals.
+
+@param dat a vector of species sample frequencies (for abundance data), or incidence-based sample frequencies (1st entry must be the number of sampling unit).
+
+@param datatype a character of data type,"abundance" or "incidence".
+
+@param from a numeric number of diversity order q (the start order of profile).
+
+@param to a numeric number of diversity order q (the end order of profile).
+
+@param interval a numeric number to specify each increment of q from the start to end order.
+
+@param B an integer to specify the number of bootstrap replications, B = 1000 is suggested for constructing confidence intervals; To save running time, use a smaller value (e.g. B = 200).
+
+@param conf a confidence coefficient between 0 and 1.
+
+@return a list, consisting of 4 matrices including respectively diversity estimates, bootstrap standard errors, lower confidence bounds, and upper confidence bounds. In each matrix, the first row gives the results for the empirical diversity, and the second row gives the results for the proposed diversity estimates. Columns give the results for different orders of q.
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
 
 ChaoHill <- function(dat, datatype=c("abundance", "incidence"), from=0, to=3, interval=0.1, B=1000, conf=0.95){
   datatype = match.arg(datatype,c("abundance","incidence"))
@@ -457,20 +576,29 @@ ChaoHill <- function(dat, datatype=c("abundance", "incidence"), from=0, to=3, in
               UCI = UCI))
 
 }
+```
 
+## Plot of confidence interval
 
-#----------------------------
-# Plot of confidence interval
-#----------------------------
-#' conf.reg(x_axis,LCL,UCL,...) is a function to plot the confidence region.
-#'
-#' \code{conf.reg} uses polygon to draw a confidence band plot
-#'
-#' @param x_axis a vector of diversity orders.
-#' @param LCL a vector of lower confidence bounds.
-#' @param UCL a vector of upper confidence bounds.
-#' @param ... further arguments to be passed to \code{polygon}
-#' @return a polygon plot
+conf.reg(x_axis,LCL,UCL,...) is a function to plot the confidence region.
+
+\code{conf.reg} uses polygon to draw a confidence band plot
+
+@param x_axis a vector of diversity orders.
+
+@param LCL a vector of lower confidence bounds.
+
+@param UCL a vector of upper confidence bounds.
+
+@param ... further arguments to be passed to \code{polygon}
+
+@return a polygon plot
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
 
 conf.reg=function(x_axis,LCL,UCL,...) {
   x.sort <- order(x_axis)
@@ -479,12 +607,20 @@ conf.reg=function(x_axis,LCL,UCL,...) {
   UCL <- UCL[x.sort]
   polygon(c(x,rev(x)),c(LCL,rev(UCL)), ...)
 }
+```
 
-#=====================================================================
-#Apply Chao Hill to all the traps Diptera and EPT
+# Analysis: Apply Chao Hill to all traps
 
-# ========== PARALLEL PROCESSING SETUP ==========
-plan(multisession, workers = 10)  # Use 10 of your 20 available threads
+## DIPTERA
+
+```{r}
+#| label: Run analysis for Diptera
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
+
+plan(multisession, workers = 4)  # Use 10 of your 20 available threads
 
 # Monitor progress and increase memory limits
 options(future.globals.maxSize = 2000 * 1024^2)  # 2GB limit for data transfer
@@ -521,44 +657,47 @@ for (trap_level in traps) {
   incidence_vectors[[trap_level]] <- incidence_vector
 }
 
-# The incidence_vectors list now contains an incidence vector for each specified trap level
-# You can access them using the trap level names, e.g., incidence_vectors[["A"]]
+# The incidence_vectors list now contains an incidence vector for each specified trap level. You can access them using the trap level names, e.g., incidence_vectors[["A"]]
 
 # # Initialize a list to store the results of ChaoHill for each trap level
 # chaohill_results <- list()
-#
+# 
 # # Loop over each trap level in the incidence_vectors list
 # for (trap_level in names(incidence_vectors)) {
-#   # Get the incidence vector for the current trap level
-#   incidence_vector <- incidence_vectors[[trap_level]]
-#
-#   # Apply the ChaoHill function to the incidence vector
-#   chaohill_result <- ChaoHill(incidence_vector)
-#
-#   # Store the result in the chaohill_results list
-#   chaohill_results[[trap_level]] <- chaohill_result
-# }
-
-# # Parallel processing for ChaoHill - Diptera
-# chaohill_results <- future_lapply(incidence_vectors, function(incidence_vector) {
-#   ChaoHill(incidence_vector)  # Keeping B=1000 (default)
-# }, future.seed = TRUE)
-#
-# # The chaohill_results list now contains the results of ChaoHill for each trap level
-# # You can access them using the trap level names, e.g., chaohill_results[["A"]]s
-
-# Clean up parallel processing
-plan(sequential)  # Return to sequential processing
-
+#    # Get the incidence vector for the current trap level
+#    incidence_vector <- incidence_vectors[[trap_level]]
+#    
+#    # Apply the ChaoHill function to the incidence vector
+#    chaohill_result <- ChaoHill(incidence_vector)
+# 
+#    # Store the result in the chaohill_results list
+#    chaohill_results[[trap_level]] <- chaohill_result}
+# 
+#    # Parallel processing for ChaoHill - Diptera
+#    chaohill_results <- future_lapply(incidence_vectors, function(incidence_vector) {
+#    ChaoHill(incidence_vector)  # Keeping B = 1000 (default)
+#    }, future.seed = TRUE)
+# 
+# # The chaohill_results list now contains the results of ChaoHill for each trap level. You can access them using the trap level names, e.g., chaohill_results[["A"]]s
+# 
+# # Clean up parallel processing
+# plan(sequential)  # Return to sequential processing
+# 
 # saveRDS(chaohill_results, "Outputs/chaohill_results_diptera.rds")  # Save results for Diptera
 
-chaohill_results <- readRDS(chaohill_results, "Outputs/chaohill_results_diptera.rds")  # read results for Diptera for quicker analyses
+chaohill_results <- readRDS("Outputs/chaohill_results_diptera.rds")  # read results for Diptera for quicker analyses
+```
 
-######################################################################################
-# EPT ChaoHill Per trap
+## EPT
 
-# ========== PARALLEL PROCESSING SETUP ==========
-plan(multisession, workers = 10)  # Use 10 of your 20 available threads
+```{r}
+#| label: Run analysis for EPT
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
+
+plan(multisession, workers = 4)  # Use 10 of your 20 available threads
 
 # Monitor progress and increase memory limits
 options(future.globals.maxSize = 2000 * 1024^2)  # 2GB limit for data transfer
@@ -595,41 +734,52 @@ for (trap_level in traps) {
   incidence_vectors[[trap_level]] <- incidence_vector
 }
 
-# The incidence_vectors list now contains an incidence vector for each specified trap level
-# You can access them using the trap level names, e.g., incidence_vectors[["A"]]
+# The incidence_vectors list now contains an incidence vector for each specified trap level. You can access them using the trap level names, e.g., incidence_vectors[["A"]]
 
 # # Initialize a list to store the results of ChaoHill for each trap level
 # ept_chaohill_results <- list()
-#
+# 
 # # Loop over each trap level in the incidence_vectors list
 # for (trap_level in names(incidence_vectors)) {
-#   # Get the incidence vector for the current trap level
-#   incidence_vector <- incidence_vectors[[trap_level]]
-#
-#   # Apply the ChaoHill function to the incidence vector
-#   chaohill_result <- ChaoHill(incidence_vector)
-#
-# #   # Store the result in the ept_chaohill_results list
-# #   ept_chaohill_results[[trap_level]] <- chaohill_result
-# # }
-#
-# # Parallel processing for ChaoHill - EPT
-# ept_chaohill_results <- future_lapply(incidence_vectors, function(incidence_vector) {
-#   ChaoHill(incidence_vector)  # Keeping B=1000 (default)
-# }, future.seed = TRUE)
-
-# The ept_chaohill_results list now contains the results of ChaoHill for each trap level
-# You can access them using the trap level names, e.g., ept_chaohill_results[["A"]]
-
-# Clean up parallel processing
-plan(sequential)  # Return to sequential processing
-
+#    # Get the incidence vector for the current trap level
+#    incidence_vector <- incidence_vectors[[trap_level]]
+# 
+#    # Apply the ChaoHill function to the incidence vector
+#    chaohill_result <- ChaoHill(incidence_vector)
+# 
+#    # Store the result in the ept_chaohill_results list
+#    ept_chaohill_results[[trap_level]] <- chaohill_result
+#    }
+# 
+#    # Parallel processing for ChaoHill - EPT
+#    ept_chaohill_results <- future_lapply(incidence_vectors, function(incidence_vector) {
+#     ChaoHill(incidence_vector)  # Keeping B = 1000 (default)
+#     }, future.seed = TRUE)
+# 
+# # The ept_chaohill_results list now contains the results of ChaoHill for each trap level. You can access them using the trap level names, e.g., ept_chaohill_results[["A"]]
+# 
+# # Clean up parallel processing
+# plan(sequential)  # Return to sequential processing
+# 
 # saveRDS(ept_chaohill_results, "Outputs/chaohill_results_ept.rds")  # Save results for EPT
 
 ept_chaohill_results <- readRDS("Outputs/chaohill_results_ept.rds")  # read results for EPT for quicker analyses
+```
 
-####################################################
-png("Plots/Hill_numbers_long.png", width = 8, height = 20, unit = "in", res = 300, bg = "white")
+# PLOTTING
+
+## Long format
+
+```{r}
+#| label: Plot data in long format (2 columns, 7 rows)
+#| code-fold: true
+#| warning: false
+#| message: false
+#| fig-height: 20
+#| fig-width: 8
+#| fig-format: svg
+
+# png("Plots/All plots for publication/Figure3_long.png", width = 8, height = 20, res = 450, bg = "white")
 
 q <- seq(0, 3, 0.1)
 
@@ -759,11 +909,22 @@ legend("bottom",
        text.width = 0.15,
        inset = c(0, 0.001))  # Increased inset to push legend further down
 
-dev.off()
+# dev.off()
+```
 
-####################################################
-# For plot wider format
-png("Plots/Hill_numbers_wide.png", width = 20, height = 7, unit = "in", res = 300, bg = "white")
+## Wide format
+
+```{r}
+#| label: Plot data in long format (7 columns, 2 rows)
+#| code-fold: true
+#| warning: false
+#| message: false
+#| output: false
+#| fig-height: 8
+#| fig-width: 20
+#| fig-format: svg
+
+png("Plots/All plots for publication/Figure3.png", width = 20, height = 7, unit = "in", res = 450, bg = "white")
 
 q <- seq(0, 3, 0.1)
 
@@ -888,3 +1049,4 @@ legend("bottom",
        inset = c(0, 0.005))  # Better positioned legend
 
 dev.off()
+```
