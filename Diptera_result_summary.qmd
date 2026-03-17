@@ -29,7 +29,7 @@ library(mobr)
 library(iNEXT)
 library(readxl)
 library(writexl)
-library(INLA)
+# library(INLA)
 library(DHARMa)
 library(glmmTMB)
 library(sjPlot)
@@ -37,7 +37,16 @@ library(ggeffects)
 library(scales)
 library(splines)
 library(future.apply)
+library(lattice)
 source("HighstatLibV15.R")
+```
+
+# Add missing fonts
+
+```{r}
+library(showtext)
+showtext_auto()
+font_add("Arial", regular = "arial.ttf", bold = "arialbd.ttf", italic = "ariali.ttf")
 ```
 
 # Set plotting parameters
@@ -365,7 +374,7 @@ for (i in unique(diptera_long$trap)) {                          # Loop through e
   EvenJ <- Shan / log(SppRich)                          # Pielou's evenness
   E10 <- Shan / SppRich                                 # Shannon's evenness
   Abund <- rowSums(sub_ta)                              # Total abundance
-  S_PIE <- calc_PIE(sub_ta, ENS = TRUE)                 # Effective number of common species
+  S_PIE <- calc_PIE(sub_ta)                             # Effective number of common species
 
   # Calculate species turnover metrics between years
   DATA1_Turnover <- codyn::turnover(sub,

@@ -64,7 +64,7 @@ ept_turn <- readRDS("Plots/EPT/EPT_turnover_model.rds")                        #
 diptera_abund <- 
   diptera_abund +
     annotate("text", x = -Inf, y = Inf,
-           label = "A",
+           label = "i",
            hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
 diptera_abund
 ```
@@ -79,7 +79,7 @@ diptera_abund
 diptera_rich <- 
   diptera_rich +
     annotate("text", x = -Inf, y = Inf,
-           label = "C",
+           label = "iii",
            hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
 diptera_rich
 ```
@@ -94,7 +94,7 @@ diptera_rich
 diptera_turn <- 
   diptera_turn +
     annotate("text", x = -Inf, y = Inf,
-           label = "E",
+           label = "v",
            hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
 
 diptera_turn
@@ -112,7 +112,7 @@ diptera_turn
 ept_abund <- 
   ept_abund +
     annotate("text", x = -Inf, y = Inf,
-           label = "B",
+           label = "ii",
            hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
 
 ept_abund
@@ -128,7 +128,7 @@ ept_abund
 ept_rich <- 
   ept_rich +
     annotate("text", x = -Inf, y = Inf,
-           label = "D",
+           label = "iv",
            hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
 
 ept_rich
@@ -143,7 +143,7 @@ ept_rich
 ept_turn <- 
   ept_turn +
     annotate("text", x = -Inf, y = Inf,
-           label = "F",
+           label = "vi",
            hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
 
 ept_turn
