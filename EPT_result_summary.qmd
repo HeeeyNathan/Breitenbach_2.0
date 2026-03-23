@@ -1141,7 +1141,11 @@ mod_overall4 <- glmmTMB(Abund ~ poly(year.std, 1) + (1 | ftrap) + ar1(0 + factor
                         family = nbinom2, 
                         data = TD_red)
 
-AIC(mod_overall, mod_overall1, mod_overall2, mod_overall3, mod_overall4)
+mod_overall5 <- glmmTMB(Abund ~ ns(year.std, df = 4) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap),
+                            family = nbinom2, 
+                            data = TD_red)
+
+AIC(mod_overall, mod_overall1, mod_overall2, mod_overall3, mod_overall4, mod_overall5)
 
 # Fit separate models for each trap
 trap_models <- lapply(levels(TD$ftrap), function(t) {
@@ -1167,7 +1171,7 @@ names(trap_models) <- levels(TD$ftrap)
 
 # Simulated residual diagnostics
 simulation_output <- simulateResiduals(mod_overall4)
-plot(simulation_output)
+plot(simulation_output, quantreg = T)
 
 # Check for temporal autocorrelation in residuals
 acf(residuals(mod_overall4), main = "Autocorrelation of Residuals")
@@ -1188,9 +1192,9 @@ plotResiduals(simulation_output, form = TD_red$ftrap)  # Some trouble.
 validation_results <- lapply(trap_models, function(model) {
   simulateResiduals(model)
 })
-par(mfrow = c(3, 3))  # Arrange plots in a grid
+par(mfrow = c(3, 3))
 for (i in seq_along(trap_models)) {
-  plot(validation_results[[i]])
+  plot(validation_results[[i]], title = names(trap_models)[i])
 }
 par(mfrow = c(1, 1))
 ```
@@ -1615,8 +1619,13 @@ spp_mod_overall4 <- glmmTMB(SppRich ~ poly(year.std, 2) + (1 | ftrap) + ar1(0 + 
                         family = Gamma(link = "log"),  
                         data = TD_red)
 
+# spline model with trap as a random effect and AR(1) autocorrelation
+spp_mod_overall5 <- glmmTMB(SppRich ~ ns(year.std, df = 4) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap),
+                            family = Gamma(link = "log"), 
+                            data = TD_red)
+
 # Compare models
-AIC(spp_mod_overall, spp_mod_overall1, spp_mod_overall2, spp_mod_overall3, spp_mod_overall4)
+AIC(spp_mod_overall, spp_mod_overall1, spp_mod_overall2, spp_mod_overall3, spp_mod_overall4, spp_mod_overall5)
 
 spp_trap_models <- lapply(levels(TD$ftrap), function(t) {
   glmmTMB(SppRich ~ year.std, 
@@ -1665,7 +1674,7 @@ validation_results <- lapply(spp_trap_models, function(model) {
 # Plot residual diagnostics for each trap model
 par(mfrow = c(3, 3))  # Arrange plots in a grid
 for (i in seq_along(spp_trap_models)) {
-  plot(validation_results[[i]])
+  plot(validation_results[[i]], title = names(trap_models)[i])
 }
 par(mfrow = c(1, 1))
 ```
@@ -2030,8 +2039,13 @@ turn_mod_overall5 <- glmmTMB(Turnover ~ poly(year.std, 3) + (1 | ftrap) + ar1(0 
                         family = gaussian(link = "logit"), 
                         data = TD_turn_red)
 
+# spline model with trap as a random effect and AR(1) autocorrelation
+turn_mod_overall6 <- glmmTMB(Turnover ~ ns(year.std, df = 4) + (1 | ftrap) + ar1(0 + factor(year.std) | ftrap),
+                             family = gaussian(link = "logit"),
+                             data = TD_turn_red)
+
 # Compare models
-AIC(turn_mod_overall, turn_mod_overall1, turn_mod_overall2, turn_mod_overall3, turn_mod_overall4, turn_mod_overall5)
+AIC(turn_mod_overall, turn_mod_overall1, turn_mod_overall2, turn_mod_overall3, turn_mod_overall4, turn_mod_overall5, turn_mod_overall6)
 
 turn_trap_models <- lapply(levels(TD_turn$ftrap), function(t) {
   glmmTMB(Turnover ~ year.std, 
@@ -2079,7 +2093,7 @@ validation_results <- lapply(turn_trap_models, function(model) {
 # Plot residual diagnostics for each trap model
 par(mfrow = c(3, 3))  # Arrange plots in a grid
 for (i in seq_along(turn_trap_models)) {
-  plot(validation_results[[i]])
+  plot(validation_results[[i]], title = names(trap_models)[i])
 }
 par(mfrow = c(1, 1))
 ```

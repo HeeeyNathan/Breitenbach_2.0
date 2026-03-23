@@ -148,7 +148,7 @@ diptera_plot$layers <- lapply(diptera_plot$layers, function(layer) {
 diptera_plot <- 
   diptera_plot +
   annotate("text", x = -Inf, y = Inf,
-           label = "A",
+           label = "i",
            hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
 
 diptera_plot
@@ -241,7 +241,7 @@ ept_plot$layers <- lapply(ept_plot$layers, function(layer) {
 ept_plot <- 
   ept_plot +
   annotate("text", x = -Inf, y = Inf,
-           label = "B",
+           label = "ii",
            hjust = -0.5, vjust = 1.5, size = 10, fontface = "bold", color = "black")
 
 ept_plot
