@@ -40,7 +40,9 @@ This repository contains the complete analytical pipeline for examining the infl
 │   ├── rarefaction_ept.rds
 │   ├── chaohill_results_diptera.rds
 │   ├── chaohill_results_ept.rds
-│   └── Diptera_TD.rds
+│   ├── Diptera_TD.rds
+│   ├── Diptera_TD_red.rds
+│   └── diptera_family_trends.xlsx
 ├── Plots/                                           # Generated figures
 │   ├── All plots for publication/                   # Publication-ready figures
 │   ├── Diptera/                                     # Diptera-specific plots
@@ -101,6 +103,7 @@ library(sjPlot)           # Model output tables
 library(ggeffects)        # Model predictions
 library(mgcv)             # GAMs for non-linearity testing
 library(splines)          # Spline functions
+library(mblm)             # Median-based linear models
 
 # Biodiversity analysis
 library(vegan)            # Community ecology analyses
@@ -144,7 +147,7 @@ packages <- c("tidyverse", "patchwork", "janitor", "SpadeR", "vegan",
               "codyn", "mobr", "iNEXT", "readxl", "writexl", "INLA",
               "DHARMa", "glmmTMB", "sjPlot", "ggeffects", "scales",
               "splines", "future.apply", "gridExtra", "data.table",
-              "entropart", "mgcv")
+              "entropart", "mgcv", "mblm")
 
 install.packages(packages)
 ```
@@ -179,9 +182,10 @@ The analysis follows a hierarchical approach with two main taxonomic groups:
 
 ### Phase 3: Statistical Modeling
 1. **Temporal Trend Analysis**: GLMMs for abundance, richness, and turnover
-2. **Model Selection**: AIC-based comparison with various correlation structures
-3. **Model Validation**: DHARMa residual diagnostics
+2. **Model Selection**: AIC-based comparison with various correlation structures and model variants
+3. **Model Validation**: DHARMa residual diagnostics (including residual vs. predicted plots)
 4. **Predictions**: Generate fitted values with confidence intervals
+5. **Family-Level Trends**: Median-based linear models (mblm) to identify which families drove temporal changes
 
 ### Phase 4: Comparative Analysis
 1. **Cross-group Comparisons**: EPT vs. Diptera patterns
@@ -222,13 +226,20 @@ glmmTMB(Response ~ poly(year.std, degree) + (1 | ftrap) + ar1(0 + factor(year.st
 - **Random Effects**: Trap-level intercepts
 - **Correlation**: AR(1) temporal autocorrelation
 - **Predictors**: Standardized polynomials for non-linear trends
+- **Model Variants**: Multiple GLM formulations tested to address residual vs. predicted validation diagnostics
 
-#### 3. Rarefaction Analysis
+#### 3. Family-Level Trend Analysis
+- **Method**: Median-based linear models (`mblm` package) for robust slope estimation
+- **Scope**: Per-trap and overall trends in family-level abundances for both EPT and Diptera
+- **Classification**: Families classified as increasing, decreasing, or stable based on slope direction
+- **Output**: `Outputs/diptera_family_trends.xlsx` with per-family trend summaries
+
+#### 4. Rarefaction Analysis
 - **Method**: iNEXT interpolation/extrapolation
 - **Type**: Individual-based curves (q = 0)
 - **Standardization**: Common individual count for comparison
 
-#### 4. Delta Analysis (Blowes et al. 2022)
+#### 5. Delta Analysis (Blowes et al. 2022)
 - **Metrics**: ΔN (abundance), ΔS (richness), ΔS_rare (rarefied richness)
 - **Correlations**: Pairwise relationships between delta metrics
 - **Visualization**: Scatterplots with ellipses and trend lines
@@ -345,7 +356,7 @@ graph TD
     C --> D[EPT Analysis<br/>EPT_result_summary.qmd]
     C --> E[Diptera Analysis<br/>Diptera_result_summary.qmd]
     
-    D --> F[Core Analyses:<br/>• Basic Indices<br/>• Diversity Profiles<br/>• Rarefaction Curves<br/>• Temporal Models]
+    D --> F[Core Analyses:<br/>• Basic Indices<br/>• Diversity Profiles<br/>• Rarefaction Curves<br/>• Temporal Models<br/>• Family-Level Trends]
     E --> F
     
     F --> G[Combined Diversity Plots<br/>Chao-Hill plots by trap.qmd]
