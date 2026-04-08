@@ -38,6 +38,7 @@ library(scales)
 library(splines)
 library(future.apply)
 library(lattice)
+library(mblm)
 source("HighstatLibV15.R")
 ```
 
@@ -346,6 +347,67 @@ diptera_long |>
   group_by(trap) |>
   summarize(unique_species = n_distinct(sp_name), 
             total_abundance = sum(abundance))
+```
+
+## Mblm trends in Diptera family abundances per trap
+
+```{r}
+diptera_summary <- diptera_long %>%
+  filter(trap %in% c("A", "B", "C", "E", "G", "I", "III")) |> 
+  group_by(trap, year, family) %>%
+  summarise(total_abundance = sum(abundance), .groups = "drop")
+
+trend_df <- diptera_summary %>%
+  group_by(trap, family) %>%
+  summarise(
+    slope = {
+      df <- pick(everything())
+      if (n_distinct(df$year) > 1) {
+        coef(mblm(total_abundance ~ year, data = df))[2]
+      } else {
+        NA_real_
+      }
+    },
+    trend = case_when(
+      is.na(slope) ~ NA_character_,
+      slope > 0 ~ "Increase",
+      slope < 0 ~ "Decrease",
+      TRUE ~ "Stable"
+    ),
+    .groups = "drop"
+  )
+
+trend_counts <- trend_df %>%
+  group_by(family, trend) %>%
+  summarise(n = n(), .groups = "drop")
+
+overall_trend_df <- diptera_summary %>%
+  group_by(family, year) %>%
+  summarise(total_abundance = sum(total_abundance), .groups = "drop") %>%
+  group_by(family) %>%
+  summarise(
+    slope = {
+      df <- pick(everything())
+      if (n_distinct(df$year) > 1) {
+        coef(mblm(total_abundance ~ year, data = df))[2]
+      } else {
+        NA_real_
+      }
+    },
+    trend = case_when(
+      is.na(slope) ~ NA_character_,
+      slope > 0 ~ "Increase",
+      slope < 0 ~ "Decrease",
+      TRUE ~ "Stable"
+    ),
+    .groups = "drop"
+  )
+
+print(trend_counts, n = Inf)
+print(trend_df, n = Inf)
+print(overall_trend_df, n = Inf)
+
+write_xlsx(trend_df, "Outputs/diptera_family_trends.xlsx")
 ```
 
 ## Standard community indices + turnover
@@ -1642,7 +1704,7 @@ plotResiduals(simulation_output, form = TD_red$year)   # Some trouble.
 plotResiduals(simulation_output, form = TD_red$ftrap)  # Some trouble.
 ```
 
-###  Individual trap models
+### Individual trap models
 
 ```{r}
 #| label: Species richness trap specific model validations
